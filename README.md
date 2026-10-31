@@ -34,3 +34,16 @@ calling the API directly. Old reports keep the exact questions and wording the l
 npm test            # checklist logic (incl. Mira's 25 tests) + database security tests (needs PostgreSQL 16)
 npm run test:e2e    # real pages in Chromium at phone size, demo mode (needs Playwright)
 ```
+
+## Read-aloud voice (English and Spanish)
+Turn it on with **Read it to me** in the tour, or in **Help**. The tour and the main messages play
+natural recordings from `audio/`, made with the free open-source [Kokoro](https://github.com/hexgrad/kokoro)
+voice (Apache-2.0) via [kokoro-onnx](https://github.com/thewh1teagle/kokoro-onnx). Checklist questions use
+the phone's own most natural voice; if the phone has no voice for that language, the site says how to add one.
+
+After changing any tour or message text, record it again (only new sentences are recorded):
+```
+node tools/voice_texts.mjs > tools/voice_texts.json
+python tools/make_voice.py --models <folder with kokoro-v1.0.onnx and voices-v1.0.bin>
+```
+`npm test` fails if a sentence has no recording.

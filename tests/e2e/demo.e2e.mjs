@@ -12,7 +12,7 @@ let chromium;
 try { ({chromium} = require('playwright')); } catch { ({chromium} = require(execSync('npm root -g').toString().trim() + '/playwright')); }
 const ROOT = fileURLToPath(new URL('../..', import.meta.url));
 const PORT = 8000 + Math.floor(Math.random() * 900);
-const URL_ = `http://127.0.0.1:${PORT}/index.html`;
+const URL_ = `http://127.0.0.1:${PORT}/index.html?demo`;
 
 let server, browser, ctx, page;
 const pageErrors = [];
@@ -142,7 +142,7 @@ test('Supervisor: group question, personal change, restore, hide', async () => {
   await page.getByText('Shift of').waitFor();
   assert.equal(await page.locator('fieldset', {hasText: 'Gym mopped'}).count(), 0);
   assert.equal(await page.locator('fieldset', {hasText: 'Restrooms'}).count(), 0, 'hidden for Building B');
-  assert.match(await page.locator('fieldset', {hasText: 'Shift notes'}).innerText(), /Required/);
+  assert.doesNotMatch(await page.locator('fieldset', {hasText: 'Shift notes'}).innerText(), /Optional/, 'made required');
   assert.match(await page.locator('fieldset').first().innerText(), /Doors locked/, 'new order applies');
   await signOut();
 

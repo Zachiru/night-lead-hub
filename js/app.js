@@ -4,9 +4,12 @@ import {resolveQuestions, checkAnswers, shiftDate, labelFor} from './rules.js';
 import {exportReports, formatAnswer, formatTime} from './export.js';
 import {createSupabaseApi, ApiError} from './api-supabase.js';
 import {createDemoApi} from './api-demo.js';
+import {voiceSupported, speak, stopSpeaking} from './voice.js';
 
 const cfg = window.NLH_CONFIG || {};
-const api = cfg.supabaseUrl && cfg.supabaseAnonKey ? createSupabaseApi(cfg) : createDemoApi();
+// "?demo" on this computer (localhost only) runs the sample-data demo, for tests; the live site can't be switched.
+const localDemo = ['localhost', '127.0.0.1'].includes(location.hostname) && new URLSearchParams(location.search).has('demo');
+const api = cfg.supabaseUrl && cfg.supabaseAnonKey && !localDemo ? createSupabaseApi(cfg) : createDemoApi();
 const root = document.getElementById('app');
 const store = {
   get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
@@ -22,8 +25,23 @@ const S = {
   filters: null, target: 'everyone', editQ: null, previewOpen: false, tour: null, showSupervisor: false,
   resetInputs: false, // true = next render starts forms fresh instead of keeping typed text
   notes: [], acks: [], comments: [], open: new Set(), loading: false,
+  voiceOn: voiceSupported && store.get('nlh-voice') === true, // read the tour and answers out loud
 };
 let t = translator(S.lang);
+
+// ------------------------------------------------------------ voice
+const speakerBtn = (act, id = '', label = t('listen')) => voiceSupported
+  ? `<button type="button" class="speak" data-act="${act}" ${id ? `data-id="${esc(id)}"` : ''} aria-label="${esc(label)}" title="${esc(label)}">🔊</button>` : '';
+function tourStepText() {
+  const steps = t(S.me.role === 'rod' ? 'tourRod' : 'tourLead');
+  const step = steps[S.tour];
+  if (!step) return '';
+  return `${step.title}. ${step.text === 'HOME' ? (isIOS() ? t('homeIos') : t('homeAndroid')) : step.text}`;
+}
+function setVoice(on) {
+  S.voiceOn = on; store.set('nlh-voice', on);
+  if (!on) stopSpeaking();
+}
 
 // ------------------------------------------------------------ helpers
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
@@ -54,6 +72,7 @@ function setLang(lang) {
   document.documentElement.lang = lang;
   if (S.me && S.me.locale !== lang) { S.me.locale = lang; api.updateMe({locale: lang}).catch(() => {}); }
   render();
+  if (S.tour !== null && S.screen === 'app') { if (S.voiceOn) speak(tourStepText(), lang); else stopSpeaking(); }
 }
 
 // ------------------------------------------------------------ data loading
@@ -189,16 +208,19 @@ function viewAuth() {
     body = `<form data-form="signin" class="stack" novalidate>
         <label>${esc(t('email'))}<input id="si-email" name="email" type="email" required autocomplete="email" inputmode="email"></label>
         <label>${esc(t('password'))}<input id="si-pass" name="password" type="password" required autocomplete="current-password"></label>
+        ${showPassBox()}
         <button class="btn primary big" ${S.busy ? 'disabled' : ''}>${esc(t('signIn'))}</button>
       </form>
       <p><button class="link" data-act="auth-mode" data-v="forgot">${esc(t('forgotPassword'))}</button></p>
-      <p>${esc(t('noAccount'))} <button class="link" data-act="auth-mode" data-v="signup">${esc(t('signUp'))}</button></p>`;
+      <div class="first-time"><p>${esc(t('noAccount'))}</p>
+        <button class="btn big" data-act="auth-mode" data-v="signup">${esc(t('firstTimeButton'))}</button></div>`;
   } else if (m === 'signup') {
     body = `<form data-form="signup" class="stack" novalidate>
         <label>${esc(t('name'))}<input id="su-name" name="name" required maxlength="80" autocomplete="name"></label>
         <label>${esc(t('email'))}<input id="su-email" name="email" type="email" required autocomplete="email" inputmode="email"></label>
         <label>${esc(t('password'))}<input id="su-pass" name="password" type="password" required minlength="8" autocomplete="new-password" aria-describedby="pw-hint"></label>
         <p id="pw-hint" class="hint">${esc(t('passwordHint'))}</p>
+        ${showPassBox()}
         ${supervisorField()}
         <button class="btn primary big" ${S.busy ? 'disabled' : ''}>${esc(t('signUp'))}</button>
       </form>
@@ -216,6 +238,11 @@ function viewAuth() {
     ${flashBox()}<section class="card">${m === 'signup' || api.mode === 'demo' ? '' : `<h2>${esc(m === 'forgot' ? t('forgotPassword') : t('signIn'))}</h2>`}${body}</section></main>`;
 }
 
+// Lets people see what they typed, so a typo in the password isn't a mystery.
+function showPassBox() {
+  return `<label class="check"><input type="checkbox" data-act="show-pass"> ${esc(t('showPassword'))}</label>`;
+}
+
 function supervisorField() {
   return `<label class="check"><input type="checkbox" id="su-is-rod" data-act="toggle-supervisor" ${S.showSupervisor ? 'checked' : ''}> ${esc(t('supervisorQ'))}</label>
     ${S.showSupervisor ? `<label>${esc(t('inviteCode'))}<input id="su-code" name="code" autocomplete="off" autocapitalize="characters" aria-describedby="code-hint"></label>
@@ -228,6 +255,7 @@ function viewRecovery() {
     <form data-form="new-password" class="stack" novalidate>
       <label>${esc(t('newPassword'))}<input id="np-pass" name="password" type="password" minlength="8" required autocomplete="new-password"></label>
       <p class="hint">${esc(t('passwordHint'))}</p>
+      ${showPassBox()}
       <button class="btn primary big" ${S.busy ? 'disabled' : ''}>${esc(t('save'))}</button>
     </form></section></main>`;
 }
@@ -264,13 +292,12 @@ function questionField(q, {answer, error, disabled = false, prefix = 'q'}) {
   };
   let input = '';
   if (q.type === 'checkbox') input = opt(true, t('completed')) + opt(false, t('notCompleted'));
-  else if (q.type === 'yes_no') input = opt('yes', t('yes')) + opt('no', t('no')) + (q.allow_na ? opt('not_applicable', t('na')) : '');
-  else if (q.type === 'status') input = opt('done', t('done')) + opt('needs_attention', t('needsAttention')) + (q.allow_na ? opt('not_applicable', t('na')) : '');
-  else input = `<textarea id="${esc(name)}" data-q="${esc(q.id)}" data-kind="text" maxlength="3000" rows="2" placeholder="${esc(t('typeHere'))}" ${disabled ? 'disabled' : ''} aria-labelledby="${esc(name)}-l">${esc(answer ?? '')}</textarea>`;
+  else if (q.type === 'yes_no') input = opt('yes', t('yes')) + opt('no', t('no')) + (q.allow_na ? opt('not_applicable', t('naChoice')) : '');
+  else if (q.type === 'status') input = opt('done', t('done')) + opt('needs_attention', t('needsAttention')) + (q.allow_na ? opt('not_applicable', t('naChoice')) : '');
+  else input = `<textarea id="${esc(name)}" data-q="${esc(q.id)}" data-kind="text" maxlength="3000" rows="2" placeholder="${esc(t('typeHere'))}" ${disabled ? 'disabled' : ''} aria-labelledby="${esc(name)}-t">${esc(answer ?? '')}</textarea>`;
   const errId = `${name}-err`;
   return `<fieldset class="q ${error ? 'has-error' : ''}" id="${esc(name)}-box" ${error ? `aria-describedby="${esc(errId)}"` : ''}>
-    <legend id="${esc(name)}-l">${esc(lab.text)} ${lab.fallback ? `<span class="fallback">${esc(t('englishOnly'))}</span>` : ''}
-      <span class="req">${esc(q.required ? t('required') : t('optional'))}</span></legend>
+    <legend id="${esc(name)}-l"><span class="qlabel"><span id="${esc(name)}-t">${esc(lab.text)}</span>${lab.fallback ? ` <span class="fallback">${esc(t('englishOnly'))}</span>` : ''}${q.required ? '' : ` <span class="req">${esc(t('optional'))}</span>`}</span>${disabled ? '' : speakerBtn('speak-q', q.id, t('listenQuestion'))}</legend>
     <div class="choices ${q.type === 'text' ? 'text' : ''}">${input}</div>
     ${error ? `<p class="err" id="${esc(errId)}">${esc(error === 'required' ? t('errRequired') : t('errInvalid'))}</p>` : ''}
   </fieldset>`;
@@ -288,7 +315,7 @@ function viewToday() {
       <button class="btn big" data-act="edit-again">${esc(t('editResend'))}</button></section>`;
   }
   if (!c.questions.length) return `${head}<p class="card">${esc(t('noQuestions'))}</p>`;
-  const status = hasDraft ? `<p class="status draft">${esc(t('statusDraft'))}</p>` : (S.sent ? `<p class="status">${esc(t('statusSent', {time: fmtClock(S.sent.submitted_at)}))}</p>` : `<p class="status">${esc(t('statusNotStarted'))}</p>`);
+  const status = hasDraft ? `<p class="status draft">${esc(t('statusDraft'))}</p>` : (S.sent ? `<p class="status">${esc(t('statusSent', {time: fmtClock(S.sent.submitted_at)}))}</p>` : `<p class="status how">${esc(t('howToFill'))}</p>`);
   const errCount = Object.keys(S.errors).length;
   return `${head}${status}
     <form data-form="report" novalidate>
@@ -609,6 +636,8 @@ function viewHelp() {
   return `<h1>${esc(t('helpTitle'))}</h1>
     <section class="card stack"><p>${esc(t('yourRole', {role: roleName(S.me.role)}))}</p>
       <button class="btn big" data-act="tour">${esc(t('replayTutorial'))}</button>
+      ${voiceSupported ? `<label class="check"><input type="checkbox" id="voice-on" data-act="voice-toggle" ${S.voiceOn ? 'checked' : ''}> 🔊 ${esc(t('voiceSetting'))}</label>
+        <p class="hint">${esc(t('voiceHint'))}</p>` : ''}
       <div><span>${esc(t('language'))}</span> ${langSwitch()}</div></section>
     <section class="card"><h2>${esc(t('homeScreenTitle'))}</h2><p>${esc(isIOS() ? t('homeIos') : t('homeAndroid'))}</p>
       <p class="hint">${esc(isIOS() ? t('homeAndroid') : t('homeIos'))}</p></section>
@@ -658,10 +687,11 @@ function viewTour() {
   const step = steps[i];
   const text = step.text === 'HOME' ? (isIOS() ? t('homeIos') : t('homeAndroid')) : step.text;
   return `<div class="overlay" role="dialog" aria-modal="true" aria-labelledby="tour-title" aria-describedby="tour-text"><div class="card tour">
-    <p class="dots" aria-label="${i + 1} / ${steps.length}">${steps.map((_, k) => `<span class="${k === i ? 'on' : ''}"></span>`).join('')}</p>
+    <div class="tour-top"><p class="dots" aria-label="${i + 1} / ${steps.length}">${steps.map((_, k) => `<span class="${k === i ? 'on' : ''}"></span>`).join('')}</p>${langSwitch()}</div>
     <div class="tour-art" aria-hidden="true">${tourArt(step.art)}</div>
     <h2 id="tour-title" tabindex="-1">${esc(step.title)}</h2>
     <p id="tour-text" class="tour-text">${esc(text)}</p>
+    ${voiceSupported ? `<button type="button" class="btn big listen ${S.voiceOn ? 'on' : ''}" data-act="tour-voice" aria-pressed="${S.voiceOn}">🔊 ${esc(S.voiceOn ? t('voiceOnTour') : t('readToMe'))}</button>` : ''}
     <div class="row">${i > 0 ? `<button class="btn big" data-act="tour-step" data-v="-1">${esc(t('back'))}</button>` : `<button class="btn big" data-act="tour-done">${esc(t('skip'))}</button>`}
     <button class="btn primary big" id="tour-next" data-act="${last ? 'tour-done' : 'tour-step'}" data-v="1">${esc(last ? t('finish') : t('next'))}</button></div></div></div>`;
 }
@@ -685,9 +715,24 @@ root.addEventListener('click', e => {
   if (act === 'del-note') { if (!confirm(t('confirmRemoveNote'))) return; return run(async () => { await api.deleteNote(id); await loadNotes(); }); }
   if (act === 'sign-out') return run(async () => { await api.signOut(); });
   if (act === 'reset-demo') { api.resetDemo(); location.reload(); return; }
-  if (act === 'tour') { S.tour = 0; render(); return focusTour(); }
-  if (act === 'tour-step') { S.tour += Number(v); render(); return focusTour(); }
-  if (act === 'tour-done') { S.tour = null; S.me.tutorial_done = true; api.updateMe({tutorial_done: true}).catch(() => {}); return render(); }
+  if (act === 'tour') { S.tour = 0; render(); focusTour(); if (S.voiceOn) speak(tourStepText(), S.lang); return; }
+  if (act === 'tour-step') { S.tour += Number(v); render(); focusTour(); if (S.voiceOn) speak(tourStepText(), S.lang); else stopSpeaking(); return; }
+  if (act === 'tour-done') { stopSpeaking(); S.tour = null; S.me.tutorial_done = true; api.updateMe({tutorial_done: true}).catch(() => {}); return render(); }
+  // First tap turns the voice on and reads this step; tapping again while it's on reads the step again.
+  if (act === 'tour-voice') { if (!S.voiceOn) setVoice(true); render(); return speak(tourStepText(), S.lang); }
+  if (act === 'speak-q') {
+    const q = S.checklist?.questions.find(x => x.id === id);
+    if (!q) return;
+    const lab = labelFor(q, S.lang);
+    // No Spanish text yet: read the English in an English voice.
+    if (!speak(lab.text, lab.fallback ? 'en' : S.lang)) flash(t('noVoice'), 'warn');
+    return;
+  }
+  if (act === 'show-pass') {
+    for (const p of el.closest('form').querySelectorAll('input[name="password"]')) p.type = el.checked ? 'text' : 'password';
+    return;
+  }
+  if (act === 'voice-toggle') { setVoice(!S.voiceOn); if (S.voiceOn) speak(t('voiceOnSample'), S.lang); return render(); }
   if (act === 'edit-again') { S.editing = true; S.token = null; return render(); }
   if (act === 'export') return run(() => exportReports(v, filteredReports(), {people: S.people, groups: S.groups, lang: S.lang, t, from: S.filters.from, to: S.filters.to}));
   if (act === 'add-q') { S.editQ = {type: 'checkbox', label: '', label_es: '', required: true, allow_na: false}; S.resetInputs = true; render(); return document.getElementById('qf-type')?.focus(); }
@@ -860,7 +905,7 @@ async function submitReport() {
   if (S.busy) return;
   const qs = S.checklist.questions;
   const check = checkAnswers(qs, S.answers);
-  if (!check.ok) { S.errors = check.errors; render(); return focusFirstError(); }
+  if (!check.ok) { S.errors = check.errors; render(); if (S.voiceOn) speak(t('fixErrors'), S.lang); return focusFirstError(); }
   S.token = S.token || crypto.randomUUID();
   await run(async () => {
     try {
@@ -868,6 +913,7 @@ async function submitReport() {
       store.del(draftKey());
       S.sent = res; S.editing = false; S.answers = {}; S.errors = {}; S.token = null;
       S.checklist.latest = res;
+      if (S.voiceOn) speak(t('sentSpoken'), S.lang);
     } catch (e) {
       if (e instanceof ApiError && e.code === 'validation') {
         if (Object.values(e.fields || {}).includes('not_available')) {

@@ -1,0 +1,192 @@
+[
+ {
+  "id": "76c94524",
+  "lang": "en",
+  "text": "Welcome to Night Lead Hub. This short tour shows you how it works. It takes about one minute. Tap “Read it to me” if you want to hear it out loud."
+ },
+ {
+  "id": "8a2c77ed",
+  "lang": "en",
+  "text": "Answer each question. Tap one big button for each question. The one you pick turns blue."
+ },
+ {
+  "id": "ecefa492",
+  "lang": "en",
+  "text": "Honest answers are OK. “No”, “Not completed” and “Needs attention” are good answers. They tell your supervisor what needs help."
+ },
+ {
+  "id": "be576182",
+  "lang": "en",
+  "text": "Send it. When you finish, tap “Send report” at the bottom. Wait for the green “Report sent ”. That means it is saved."
+ },
+ {
+  "id": "c31093c7",
+  "lang": "en",
+  "text": "Notes from your supervisor. Your supervisor may leave you a note. It shows at the top of “Today” or on a report in “My reports”. Tap “Got it” after you read it."
+ },
+ {
+  "id": "a5078e17",
+  "lang": "en",
+  "text": "Your past reports. “My reports” keeps everything you sent. Only you and your supervisors can see them."
+ },
+ {
+  "id": "0db63af6",
+  "lang": "en",
+  "text": "Make it like an app. iPhone: open this site in Safari. Tap the Share button (a square with an arrow ) at the bottom. Then tap “Add to Home Screen”."
+ },
+ {
+  "id": "4ee565b5",
+  "lang": "en",
+  "text": "Make it like an app. Android: open this site in Chrome. Tap the menu at the top right. Then tap “Add to Home screen” or “Install app”."
+ },
+ {
+  "id": "2c52820a",
+  "lang": "en",
+  "text": "Need help?. Tap “Help” any time to see this tour again, switch English / Español, turn the voice on or off, or read common questions."
+ },
+ {
+  "id": "691c4834",
+  "lang": "en",
+  "text": "Welcome, supervisor. This short tour shows the supervisor side. It takes about one minute. Tap “Read it to me” if you want to hear it out loud."
+ },
+ {
+  "id": "156f6cd1",
+  "lang": "en",
+  "text": "See the reports. “Reports” shows who sent their checklist, who hasn’t yet, and any problems in orange. Use Today, Last 7 days or pick dates."
+ },
+ {
+  "id": "52f305b7",
+  "lang": "en",
+  "text": "Leave a note on a report. Open a report and write a note about the whole report or one answer. The Night Lead sees it and can reply."
+ },
+ {
+  "id": "ffb914dd",
+  "lang": "en",
+  "text": "Pinned notes. Use “Notes” to tell everyone, a group, or one person something new. You can see who tapped “Got it”."
+ },
+ {
+  "id": "a65abdc4",
+  "lang": "en",
+  "text": "Change the checklist. In “Checklists” pick Everyone, a group, or one person. Then add, edit, hide or move questions. “Undo change” goes back to the shared version."
+ },
+ {
+  "id": "25912f6c",
+  "lang": "en",
+  "text": "Your team. “Team” lets you put people in groups, turn access off, and make invite codes for new supervisors."
+ },
+ {
+  "id": "8c7e88f3",
+  "lang": "en",
+  "text": "Download reports. At the bottom of “Reports”, download Excel, CSV or PDF for the dates you picked."
+ },
+ {
+  "id": "7999dd11",
+  "lang": "en",
+  "text": "Your report was sent. You are done for tonight. Thank you!"
+ },
+ {
+  "id": "2384e6a1",
+  "lang": "en",
+  "text": "Please answer the highlighted questions."
+ },
+ {
+  "id": "c079c729",
+  "lang": "en",
+  "text": "Voice is on. I will read things out loud for you."
+ },
+ {
+  "id": "0c1c3f12",
+  "lang": "es",
+  "text": "Bienvenido a Night Lead Hub. Este recorrido corto le muestra cómo funciona. Toma más o menos un minuto. Toque “Léamelo” si quiere escucharlo en voz alta."
+ },
+ {
+  "id": "49da2738",
+  "lang": "es",
+  "text": "Conteste cada pregunta. Toque un botón grande en cada pregunta. El que elija se pone azul."
+ },
+ {
+  "id": "0bd09ff6",
+  "lang": "es",
+  "text": "Las respuestas honestas están bien. “No”, “No completado” y “Necesita atención” son buenas respuestas. Le dicen a su supervisor qué necesita ayuda."
+ },
+ {
+  "id": "0399f534",
+  "lang": "es",
+  "text": "Envíelo. Cuando termine, toque “Enviar reporte” abajo. Espere el mensaje verde “Reporte enviado ”. Eso significa que se guardó."
+ },
+ {
+  "id": "37600e64",
+  "lang": "es",
+  "text": "Notas de su supervisor. Su supervisor puede dejarle una nota. Aparece arriba en “Hoy” o en un reporte en “Mis reportes”. Toque “Entendido” después de leerla."
+ },
+ {
+  "id": "63c9da85",
+  "lang": "es",
+  "text": "Sus reportes anteriores. “Mis reportes” guarda todo lo que envió. Solo usted y sus supervisores pueden verlos."
+ },
+ {
+  "id": "19a7b202",
+  "lang": "es",
+  "text": "Úselo como una app. iPhone: abra este sitio en Safari. Toque el botón Compartir (un cuadro con una flecha ) abajo. Luego toque “Agregar a pantalla de inicio”."
+ },
+ {
+  "id": "a8509b4a",
+  "lang": "es",
+  "text": "Úselo como una app. Android: abra este sitio en Chrome. Toque el menú arriba a la derecha. Luego toque “Agregar a la pantalla principal” o “Instalar app”."
+ },
+ {
+  "id": "3337d1ed",
+  "lang": "es",
+  "text": "¿Necesita ayuda?. Toque “Ayuda” cuando quiera para ver este recorrido otra vez, cambiar English / Español, activar o apagar la voz, o leer preguntas comunes."
+ },
+ {
+  "id": "2362468a",
+  "lang": "es",
+  "text": "Bienvenido, supervisor. Este recorrido corto muestra la parte del supervisor. Toma más o menos un minuto. Toque “Léamelo” si quiere escucharlo en voz alta."
+ },
+ {
+  "id": "9fc26fd3",
+  "lang": "es",
+  "text": "Vea los reportes. “Reportes” muestra quién envió su lista, quién todavía no, y los problemas en naranja. Use Hoy, Últimos 7 días o elija fechas."
+ },
+ {
+  "id": "6244b5c7",
+  "lang": "es",
+  "text": "Deje una nota en un reporte. Abra un reporte y escriba una nota sobre todo el reporte o una respuesta. El líder de noche la ve y puede responder."
+ },
+ {
+  "id": "c96f4ae6",
+  "lang": "es",
+  "text": "Notas fijadas. Use “Notas” para avisar algo nuevo a todos, a un grupo o a una persona. Puede ver quién tocó “Entendido”."
+ },
+ {
+  "id": "48968194",
+  "lang": "es",
+  "text": "Cambie la lista. En “Listas” elija Todos, un grupo o una persona. Luego agregue, edite, oculte o mueva preguntas. “Deshacer cambio” vuelve a la versión compartida."
+ },
+ {
+  "id": "26bb9601",
+  "lang": "es",
+  "text": "Su equipo. “Equipo” le deja poner personas en grupos, quitar acceso y crear códigos para nuevos supervisores."
+ },
+ {
+  "id": "8888ea5f",
+  "lang": "es",
+  "text": "Descargue reportes. Al final de “Reportes”, descargue Excel, CSV o PDF de las fechas que eligió."
+ },
+ {
+  "id": "e35b8cd9",
+  "lang": "es",
+  "text": "Su reporte fue enviado. Terminó por esta noche. ¡Gracias!"
+ },
+ {
+  "id": "0da9da66",
+  "lang": "es",
+  "text": "Por favor conteste las preguntas marcadas."
+ },
+ {
+  "id": "38b67a4e",
+  "lang": "es",
+  "text": "La voz está activada. Le leeré las cosas en voz alta."
+ }
+]
