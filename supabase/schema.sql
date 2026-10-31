@@ -294,14 +294,15 @@ begin
 end $$;
 
 -- Supervisor creates an invite code for a new supervisor.
+-- Supabase keeps pgcrypto (gen_random_bytes) in the "extensions" schema.
 create or replace function public.create_rod_invite(p_uses int default 1, p_days int default 14, p_note text default null)
-returns text language plpgsql security definer set search_path = public as $$
+returns text language plpgsql security definer set search_path = public, extensions as $$
 declare c text;
 begin
   -- auth.uid() is null only in the SQL editor, which is how the very first invite is made.
   if auth.uid() is not null and not is_rod() then raise exception 'not_allowed' using errcode = '42501'; end if;
   if p_uses not between 1 and 20 or p_days not between 1 and 60 then raise exception 'invalid_invite' using errcode = '22023'; end if;
-  c := upper(substr(translate(encode(gen_random_bytes(12), 'base64'), '+/=0O1Il', ''), 1, 12));
+  c := upper(substr(translate(encode(gen_random_bytes(18), 'base64'), '+/=0O1Il', ''), 1, 12));
   insert into rod_invites (code, created_by, expires_at, uses_left, note)
   values (c, auth.uid(), now() + make_interval(days => p_days), p_uses, left(p_note, 120));
   perform log_event('invite_created', null, jsonb_build_object('uses', p_uses, 'days', p_days));
