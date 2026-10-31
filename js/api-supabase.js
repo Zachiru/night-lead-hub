@@ -106,5 +106,26 @@ export function createSupabaseApi({supabaseUrl, supabaseAnonKey}) {
     async listInvites() { return data(await sb.from('rod_invites').select('*').order('created_at', {ascending: false})); },
     async createInvite({uses, days, note}) { return data(await sb.rpc('create_rod_invite', {p_uses: uses, p_days: days, p_note: note || null})); },
     async revokeInvite(code) { data(await sb.from('rod_invites').delete().eq('code', code)); },
+
+    // Comments on reports (supervisor notes, Night Lead replies). The database limits who sees what.
+    async listComments(submissionIds) {
+      const all = [];
+      for (let i = 0; i < submissionIds.length; i += 100) {
+        all.push(...data(await sb.from('report_comments').select('*').in('submission_id', submissionIds.slice(i, i + 100)).order('created_at')));
+      }
+      return all;
+    },
+    async listMyComments() { return data(await sb.from('report_comments').select('*').eq('lead_id', uid).order('created_at')); },
+    async addComment(submissionId, body, questionId) {
+      return data(await sb.rpc('add_report_comment', {p_submission: submissionId, p_body: body, p_question: questionId || null}));
+    },
+    async deleteComment(id) { data(await sb.from('report_comments').delete().eq('id', id)); },
+    async markCommentsRead(submissionId) { data(await sb.rpc('mark_comments_read', {p_submission: submissionId})); },
+    // Pinned notes from supervisors.
+    async listNotes() { return data(await sb.from('shift_notes').select('*').order('created_at', {ascending: false})); },
+    async saveNote(n) { data(await sb.from('shift_notes').insert(n)); },
+    async deleteNote(id) { data(await sb.from('shift_notes').delete().eq('id', id)); },
+    async listAcks() { return data(await sb.from('note_acks').select('*')); },
+    async ackNote(id) { data(await sb.rpc('ack_note', {p_note: id})); },
   };
 }

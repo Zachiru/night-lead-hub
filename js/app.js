@@ -21,6 +21,7 @@ const S = {
   people: [], groups: [], questions: [], overrides: [], reports: [], invites: [], newInvite: null,
   filters: null, target: 'everyone', editQ: null, previewOpen: false, tour: null, showSupervisor: false,
   resetInputs: false, // true = next render starts forms fresh instead of keeping typed text
+  notes: [], acks: [], comments: [], open: new Set(), loading: false,
 };
 let t = translator(S.lang);
 
@@ -51,7 +52,7 @@ async function run(fn) {
 function setLang(lang) {
   S.lang = lang; t = translator(lang); store.set('nlh-lang', lang);
   document.documentElement.lang = lang;
-  if (S.me && S.me.locale !== lang) api.updateMe({locale: lang}).catch(() => {});
+  if (S.me && S.me.locale !== lang) { S.me.locale = lang; api.updateMe({locale: lang}).catch(() => {}); }
   render();
 }
 
@@ -73,16 +74,26 @@ async function loadSession() {
   store.del('nlh-pending-invite');
   S.screen = 'app';
   S.tab = S.me.role === 'rod' ? 'reports' : 'today';
+  history.replaceState({tab: S.tab}, '');
   if (!S.me.tutorial_done) S.tour = 0;
   await loadTab();
 }
+
+// Night Lead's supervisor notes and report comments (used for the badges on the tabs).
+async function loadInbox() {
+  if (!S.me || S.me.role === 'rod') return;
+  [S.notes, S.acks, S.comments] = await Promise.all([api.listNotes(), api.listAcks(), api.listMyComments()]);
+}
+const unackedNotes = () => S.notes.filter(n => !S.acks.some(a => a.note_id === n.id && a.user_id === S.me.id));
+const unreadForMe = c => S.me.role === 'rod' ? (c.author_id === c.lead_id && !c.read_by_rod_at) : (c.author_id !== S.me.id && !c.read_by_lead_at);
 
 async function loadTab() {
   S.loading = true;
   render();
   try {
-    if (S.tab === 'today') await loadChecklist();
-    else if (S.tab === 'history') S.myReports = await api.myReports();
+    if (S.tab === 'today') { await loadChecklist(); await loadInbox(); }
+    else if (S.tab === 'history') { S.myReports = await api.myReports(); await loadInbox(); }
+    else if (S.tab === 'notes') await loadNotes();
     else if (S.tab === 'reports') await loadReports();
     else if (S.tab === 'checklists') await loadBuilder();
     else if (S.tab === 'team') await loadTeam();
@@ -105,7 +116,12 @@ async function loadChecklist() {
 async function loadReports() {
   if (!S.filters) { const d = shiftDate(); S.filters = {from: d, to: d, group: '', person: '', issues: false}; }
   [S.people, S.groups, S.reports] = await Promise.all([api.listPeople(), api.listGroups(), api.listReports(S.filters)]);
+  S.comments = await api.listComments(S.reports.map(r => r.id));
 }
+async function loadNotes() {
+  [S.people, S.groups, S.notes, S.acks] = await Promise.all([api.listPeople(), api.listGroups(), api.listNotes(), api.listAcks()]);
+}
+const daysBefore = (d, n) => { const x = new Date(d + 'T12:00:00Z'); x.setUTCDate(x.getUTCDate() - n); return x.toISOString().slice(0, 10); };
 async function loadBuilder() {
   [S.people, S.groups, S.questions, S.overrides] = await Promise.all([api.listPeople(), api.listGroups(), api.listQuestions(), api.listOverrides()]);
 }
@@ -219,8 +235,9 @@ function viewRecovery() {
 // ------------------------------------------------------------ views: app shell
 function viewApp() {
   const rod = S.me.role === 'rod';
-  const tabs = rod ? [['reports', t('tabReports')], ['checklists', t('tabChecklists')], ['team', t('tabTeam')], ['help', t('help')]]
-                   : [['today', t('tabToday')], ['history', t('tabHistory')], ['help', t('help')]];
+  const unreadReplies = rod ? 0 : S.comments.filter(unreadForMe).length;
+  const tabs = rod ? [['reports', t('tabReports')], ['notes', t('tabNotes')], ['checklists', t('tabChecklists')], ['team', t('tabTeam')], ['help', t('help')]]
+                   : [['today', t('tabToday'), unackedNotes().length], ['history', t('tabHistory'), unreadReplies], ['help', t('help')]];
   let main = '';
   if (S.loading) main = `<p aria-busy="true">${esc(t('loading'))}</p>`;
   else if (S.tab === 'today') main = viewToday();
@@ -228,9 +245,10 @@ function viewApp() {
   else if (S.tab === 'reports') main = viewReports();
   else if (S.tab === 'checklists') main = viewBuilder();
   else if (S.tab === 'team') main = viewTeam();
+  else if (S.tab === 'notes') main = viewNotes();
   else main = viewHelp();
   return `<header class="top"><div><strong>${esc(t('appName'))}</strong><span class="who">${esc(S.me.display_name)} · ${esc(roleName(S.me.role))}</span></div>${langSwitch()}</header>
-    <nav class="tabs" aria-label="Main">${tabs.map(([k, label]) => `<button data-act="tab" data-v="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${esc(label)}</button>`).join('')}</nav>
+    <nav class="tabs" aria-label="Main">${tabs.map(([k, label, n]) => `<button data-act="tab" data-v="${k}" ${S.tab === k ? 'aria-current="page"' : ''}>${esc(label)}${n ? ` <span class="badge" aria-label="${n} new">${n}</span>` : ''}</button>`).join('')}</nav>
     <main class="content">${flashBox()}${main}</main>`;
 }
 
@@ -238,9 +256,11 @@ function viewApp() {
 function questionField(q, {answer, error, disabled = false, prefix = 'q'}) {
   const lab = labelFor(q, S.lang);
   const name = `${prefix}-${q.id}`;
+  const icons = {true: '✓', false: '✗', done: '✓', needs_attention: '⚠'};
   const opt = (value, text) => {
     const checked = answer === value;
-    return `<label class="choice ${checked ? 'on' : ''}"><input type="radio" name="${esc(name)}" value="${esc(String(value))}" data-q="${esc(q.id)}" data-kind="${q.type}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}><span>${esc(text)}</span></label>`;
+    const icon = icons[String(value)] ? `<span class="ico" aria-hidden="true">${icons[String(value)]}</span>` : '';
+    return `<label class="choice ${checked ? 'on' : ''} v-${esc(String(value))}"><input type="radio" name="${esc(name)}" value="${esc(String(value))}" data-q="${esc(q.id)}" data-kind="${q.type}" aria-label="${esc(text)}" ${checked ? 'checked' : ''} ${disabled ? 'disabled' : ''}>${icon}<span>${esc(text)}</span></label>`;
   };
   let input = '';
   if (q.type === 'checkbox') input = opt(true, t('completed')) + opt(false, t('notCompleted'));
@@ -260,7 +280,7 @@ function viewToday() {
   const c = S.checklist;
   if (!c) return `<p>${esc(t('loading'))}</p>`;
   const hasDraft = Object.keys(S.answers).length > 0;
-  const head = `<h1>${esc(t('shiftOf', {date: fmtDate(c.shift_date)}))}</h1>`;
+  const head = `<h1>${esc(t('shiftOf', {date: fmtDate(c.shift_date)}))}</h1>${viewLeadNotes()}`;
   if (S.sent && !S.editing) {
     return `${head}<section class="card sent" role="status"><h2>${esc(t('sentTitle'))}</h2>
       <p>${esc(t('sentBody', {time: fmtClock(S.sent.submitted_at), date: fmtDate(S.sent.shift_date)}))}</p>
@@ -274,25 +294,60 @@ function viewToday() {
     <form data-form="report" novalidate>
       ${errCount ? `<p class="flash err" role="alert">${esc(t('fixErrors'))}</p>` : ''}
       ${c.questions.map(q => questionField(q, {answer: S.answers[q.id], error: S.errors[q.id]})).join('')}
-      <div class="sticky-submit"><button class="btn primary big" id="send-report" ${S.busy ? 'disabled aria-busy="true"' : ''}>${esc(S.busy ? t('sending') : t('submit'))}</button></div>
+      <div class="sticky-submit"><p class="progress" aria-live="polite">${esc(t('progress', {n: c.questions.filter(q => S.answers[q.id] !== undefined && S.answers[q.id] !== '').length, m: c.questions.length}))}</p>
+      <button class="btn primary big" id="send-report" ${S.busy ? 'disabled aria-busy="true"' : ''}>${esc(S.busy ? t('sending') : t('submit'))}</button></div>
     </form>`;
 }
 
+function viewComment(c) {
+  const who = c.author_id === S.me.id ? t('youWord') : (c.author_name || t('supervisorWord'));
+  const mine = c.author_id === S.me.id;
+  return `<div class="comment ${mine ? 'mine' : ''} ${c.author_id === c.lead_id ? 'from-lead' : 'from-rod'}">
+    <p class="meta">${esc(t('fromName', {name: who, date: formatTime(c.created_at, S.lang)}))}${unreadForMe(c) ? ` <span class="badge">${esc(t('newNote'))}</span>` : ''}</p>
+    <p>${esc(c.body)}</p></div>`;
+}
+
 function viewSnapshot(r) {
+  const comments = S.comments.filter(c => c.submission_id === r.id);
+  const lead = S.me.role === 'rod' ? S.people.find(p => p.id === r.lead_id) : S.me;
+  const general = comments.filter(c => !c.question_id);
   return `<ul class="answers">${r.questions.map(q => {
     const lab = labelFor(q, S.lang);
     const a = formatAnswer(q, t);
     const bad = q.answer === false || q.answer === 'needs_attention' || q.answer === 'no';
-    return `<li><span>${esc(lab.text)}</span><strong class="${bad ? 'warn' : ''}">${esc(a || '—')}</strong></li>`;
-  }).join('')}</ul>`;
+    const qc = comments.filter(c => c.question_id === q.id);
+    return `<li><div class="ans"><span>${esc(lab.text)}</span><strong class="${bad ? 'warn' : ''}">${esc(a || '—')}</strong></div>${qc.map(viewComment).join('')}</li>`;
+  }).join('')}</ul>
+  ${general.length ? `<h3>${esc(t('commentsTitle'))}</h3>${general.map(viewComment).join('')}` : ''}
+  <form data-form="comment" class="stack comment-form" data-sub="${esc(r.id)}">
+    ${S.me.role === 'rod' ? `<label>${esc(t('commentAbout'))}<select name="question" id="cq-${esc(r.id)}"><option value="">${esc(t('wholeReport'))}</option>
+      ${r.questions.map(q => `<option value="${esc(q.id)}">${esc(labelFor(q, S.lang).text)}</option>`).join('')}</select></label>` : ''}
+    <label>${esc(S.me.role === 'rod' ? t('addComment', {name: lead?.display_name || '?'}) : t('writeReply'))}
+      <textarea name="body" id="cb-${esc(r.id)}" rows="2" maxlength="1000"></textarea></label>
+    <button class="btn">${esc(S.me.role === 'rod' ? t('sendComment') : t('sendReply'))}</button>
+  </form>`;
+}
+
+function viewLeadNotes() {
+  if (!S.notes.length) return '';
+  return `<section class="notes" aria-label="${esc(t('notesTitle'))}"><h2>${esc(t('notesTitle'))}</h2>${S.notes.map(n => {
+    const acked = S.acks.some(a => a.note_id === n.id && a.user_id === S.me.id);
+    return `<div class="card note ${acked ? 'acked' : ''}"><p class="note-body">${esc(n.body)}</p>
+      <p class="meta">${esc(t('fromName', {name: n.created_by_name || t('supervisorWord'), date: formatTime(n.created_at, S.lang)}))}</p>
+      ${acked ? `<p class="done-mark">${esc(t('youRead'))}</p>` : `<button class="btn primary" data-act="ack" data-id="${esc(n.id)}">${esc(t('gotIt'))}</button>`}</div>`;
+  }).join('')}</section>`;
 }
 
 function viewHistory() {
   if (!S.myReports) return `<p>${esc(t('loading'))}</p>`;
   if (!S.myReports.length) return `<h1>${esc(t('tabHistory'))}</h1><p class="card">${esc(t('noReports'))}</p>`;
-  return `<h1>${esc(t('tabHistory'))}</h1>${S.myReports.map(r => `<details class="card report"><summary>
+  return `<h1>${esc(t('tabHistory'))}</h1><p class="hint">${esc(t('historyHint'))}</p>${S.myReports.map(r => {
+    const unread = S.comments.filter(c => c.submission_id === r.id && unreadForMe(c)).length;
+    return `<details class="card report" data-sub="${esc(r.id)}" ${S.open.has(r.id) ? 'open' : ''}><summary>
     <strong>${esc(fmtDate(r.shift_date))}</strong> · ${esc(t('statusSent', {time: fmtClock(r.submitted_at)}))}
-    ${r.revision > 1 ? `<span class="chip">${esc(t('update', {n: r.revision}))}</span>` : ''}</summary>${viewSnapshot(r)}</details>`).join('')}`;
+    ${r.revision > 1 ? `<span class="chip">${esc(t('update', {n: r.revision}))}</span>` : ''}
+    ${unread ? `<span class="badge">${esc(t('newNote'))}</span>` : ''}</summary>${viewSnapshot(r)}</details>`;
+  }).join('')}`;
 }
 
 // ------------------------------------------------------------ Supervisor: reports
@@ -338,6 +393,9 @@ function viewReports() {
       ${missing.length ? `<p>${esc(t('missing'))} ${missing.map(p => esc(p.display_name)).join(', ')}</p>` : ''}</section>`;
   }
   return `<h1>${esc(t('tabReports'))}</h1>
+    <div class="row ranges"><button class="btn sm" data-act="range" data-v="0">${esc(t('rangeToday'))}</button>
+      <button class="btn sm" data-act="range" data-v="6">${esc(t('range7'))}</button>
+      <button class="btn sm" data-act="range" data-v="29">${esc(t('range30'))}</button></div>
     <form data-form="filters" class="filters card">
       <label>${esc(t('from'))}<input type="date" name="from" id="f-from" value="${esc(f.from)}" required></label>
       <label>${esc(t('to'))}<input type="date" name="to" id="f-to" value="${esc(f.to)}" required></label>
@@ -349,7 +407,8 @@ function viewReports() {
     ${summary}
     ${rows.length ? rows.map(r => {
       const p = S.people.find(x => x.id === r.lead_id);
-      return `<details class="card report"><summary><strong>${esc(p?.display_name || '?')}</strong> · ${esc(groupName(p?.group_id))} · ${esc(fmtDate(r.shift_date))}
+      const replies = S.comments.filter(c => c.submission_id === r.id && unreadForMe(c)).length;
+      return `<details class="card report" data-sub="${esc(r.id)}" ${S.open.has(r.id) ? 'open' : ''}><summary><strong>${esc(p?.display_name || '?')}</strong>${replies ? ` <span class="badge">${esc(t('newReply'))}</span>` : ''} · ${esc(groupName(p?.group_id))} · ${esc(fmtDate(r.shift_date))}
         <span class="meta">${esc(t('sentAt'))} ${esc(fmtClock(r.submitted_at))} · ${esc(t('answered', {a: r.answered, t: r.total}))}
         ${r.needs_attention ? ` · <span class="warn">${esc(t('issues', {n: r.needs_attention}))}</span>` : ''}
         ${r.not_completed ? ` · <span class="warn">${esc(t('notDoneCount', {n: r.not_completed}))}</span>` : ''}
@@ -517,12 +576,43 @@ function viewTeam() {
         <button class="btn primary" ${S.busy ? 'disabled' : ''}>${esc(t('newInvite'))}</button></form></section>`;
 }
 
+// ------------------------------------------------------------ Supervisor: pinned notes
+function viewNotes() {
+  const leads = S.people.filter(p => p.role === 'night_lead' && p.enabled);
+  const audience = n => leads.filter(p => n.scope === 'everyone' || (n.scope === 'group' && p.group_id === n.group_id) || (n.scope === 'person' && p.id === n.person_id));
+  const who = n => n.scope === 'everyone' ? t('everyone') : n.scope === 'group' ? (S.groups.find(g => g.id === n.group_id)?.name || '?') : (S.people.find(p => p.id === n.person_id)?.display_name || '?');
+  const now = new Date();
+  return `<h1>${esc(t('tabNotes'))}</h1><p class="hint">${esc(t('notesIntro'))}</p>
+    <section class="card"><form data-form="note" class="stack" novalidate>
+      <label>${esc(t('noteFor'))}<select name="target" id="n-target">
+        <option value="everyone">${esc(t('everyone'))}</option>
+        ${S.groups.length ? `<optgroup label="${esc(t('groups'))}">${S.groups.map(g => `<option value="group:${esc(g.id)}">${esc(g.name)}</option>`).join('')}</optgroup>` : ''}
+        ${leads.length ? `<optgroup label="${esc(t('people'))}">${leads.map(p => `<option value="person:${esc(p.id)}">${esc(p.display_name)}</option>`).join('')}</optgroup>` : ''}
+      </select></label>
+      <label>${esc(t('noteText'))}<textarea name="body" id="n-body" rows="3" maxlength="1000"></textarea></label>
+      <label>${esc(t('noteUntil'))}<input type="date" name="until" id="n-until"></label>
+      <button class="btn primary big" ${S.busy ? 'disabled' : ''}>${esc(t('postNote'))}</button></form></section>
+    ${S.notes.length ? S.notes.map(n => {
+      const aud = audience(n);
+      const read = aud.filter(p => S.acks.some(a => a.note_id === n.id && a.user_id === p.id));
+      const unread = aud.filter(p => !read.includes(p));
+      const expired = n.expires_at && new Date(n.expires_at) <= now;
+      return `<section class="card note ${expired ? 'acked' : ''}"><p class="meta">${esc(who(n))} · ${esc(formatTime(n.created_at, S.lang))}${n.expires_at ? ' → ' + esc(fmtDate(n.expires_at.slice(0, 10))) : ''}</p>
+        <p class="note-body">${esc(n.body)}</p>
+        <p><strong>${esc(t('readBy', {n: read.length, m: aud.length}))}</strong>${unread.length ? `<br><span class="meta">${esc(t('notReadYet'))} ${unread.map(p => esc(p.display_name)).join(', ')}</span>` : ''}</p>
+        <button class="btn sm danger" data-act="del-note" data-id="${esc(n.id)}">${esc(t('removeNote'))}</button></section>`;
+    }).join('') : `<p class="card">${esc(t('noNotes'))}</p>`}`;
+}
+
 // ------------------------------------------------------------ help and tour
 function viewHelp() {
   return `<h1>${esc(t('helpTitle'))}</h1>
     <section class="card stack"><p>${esc(t('yourRole', {role: roleName(S.me.role)}))}</p>
       <button class="btn big" data-act="tour">${esc(t('replayTutorial'))}</button>
       <div><span>${esc(t('language'))}</span> ${langSwitch()}</div></section>
+    <section class="card"><h2>${esc(t('homeScreenTitle'))}</h2><p>${esc(isIOS() ? t('homeIos') : t('homeAndroid'))}</p>
+      <p class="hint">${esc(isIOS() ? t('homeAndroid') : t('homeIos'))}</p></section>
+    <section class="card"><h2>${esc(t('faqTitle'))}</h2>${t('faq').map(([q, a]) => `<details class="faq"><summary>${esc(q)}</summary><p>${esc(a)}</p></details>`).join('')}</section>
     <section class="card"><form data-form="profile" class="stack">
       <label>${esc(t('displayName'))}<input name="display_name" id="pf-name" maxlength="80" required value="${esc(S.me.display_name)}"></label>
       <button class="btn">${esc(t('save'))}</button></form></section>
@@ -536,13 +626,42 @@ function viewHelp() {
     <section class="card"><button class="btn big" data-act="sign-out">${esc(t('signOut'))}</button></section>`;
 }
 
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+
+// Small pictures for the tour, drawn with the same styles as the real screens (for looking at, not tapping).
+function tourArt(kind) {
+  const choice = (txt, on, icon = '') => `<span class="choice ${on ? 'on' : ''}">${icon ? `<span class="ico">${icon}</span>` : ''}<span>${esc(txt)}</span></span>`;
+  const q = (label, inner) => `<div class="q mini"><div class="legend">${esc(label)}</div><div class="choices">${inner}</div></div>`;
+  const sample = S.lang === 'es' ? {doors: 'Puertas cerradas', floors: 'Pisos', rest: 'Baños revisados'} : {doors: 'Doors locked', floors: 'Floors', rest: 'Restrooms checked'};
+  switch (kind) {
+    case 'welcome': return `<div class="art-logo">✓</div>`;
+    case 'answer': return q(sample.rest, choice(t('yes'), true) + choice(t('no'), false));
+    case 'honest': return q(sample.floors, choice(t('done'), false, '✓') + choice(t('needsAttention'), true, '⚠'));
+    case 'send': return `<div class="mini-btn">${esc(t('submit'))}</div><div class="card sent mini-sent"><strong>${esc(t('sentTitle'))}</strong></div>`;
+    case 'note': return `<div class="card note mini-note"><p class="note-body">${esc(S.lang === 'es' ? 'Esta noche revise también las puertas del gimnasio.' : 'Tonight please also check the gym doors.')}</p><span class="mini-btn small">${esc(t('gotIt'))}</span></div>`;
+    case 'comment': return `<div class="comment from-rod"><p class="meta">${esc(t('fromName', {name: 'Nora', date: ''}))}</p><p>${esc(S.lang === 'es' ? 'Buen trabajo. Mañana revise el gimnasio.' : 'Nice work. Tomorrow check the gym too.')}</p></div>`;
+    case 'history': return `<div class="mini-list"><div>✓ ${esc(fmtDate(daysBefore(shiftDate(), 1)))}</div><div>✓ ${esc(fmtDate(daysBefore(shiftDate(), 2)))}</div></div>`;
+    case 'reports': return `<div class="mini-list"><div>✓ Lead A · 5/5</div><div class="warn">⚠ Lead B · 1 ${esc(t('needsAttention'))}</div><div class="meta">${esc(t('missing'))} Lead C</div></div>`;
+    case 'checklists': return `<div class="mini-list"><div>${esc(t('everyone'))} ▾</div><div>↑ ↓ ${esc(t('edit'))} · ${esc(t('hide'))}</div></div>`;
+    case 'team': return `<div class="mini-list"><div>👥 ${esc(t('groups'))}</div><div class="code">AB12CD34EF56</div></div>`;
+    case 'download': return `<div class="row"><span class="mini-btn small">Excel</span><span class="mini-btn small">CSV</span><span class="mini-btn small">PDF</span></div>`;
+    case 'home': return `<div class="art-logo">${isIOS() ? '⬆︎' : '⋮'}</div>`;
+    case 'help': return `<div class="mini-tabs"><span>${esc(t('tabToday'))}</span><span>${esc(t('tabHistory'))}</span><span class="on">${esc(t('help'))}</span></div>`;
+    default: return '';
+  }
+}
+
 function viewTour() {
   const steps = t(S.me.role === 'rod' ? 'tourRod' : 'tourLead');
   const i = S.tour;
   const last = i === steps.length - 1;
-  return `<div class="overlay" role="dialog" aria-modal="true" aria-labelledby="tour-text"><div class="card tour">
-    <p class="dots" aria-hidden="true">${steps.map((_, k) => `<span class="${k === i ? 'on' : ''}"></span>`).join('')}</p>
-    <p id="tour-text" class="tour-text" tabindex="-1">${esc(steps[i])}</p>
+  const step = steps[i];
+  const text = step.text === 'HOME' ? (isIOS() ? t('homeIos') : t('homeAndroid')) : step.text;
+  return `<div class="overlay" role="dialog" aria-modal="true" aria-labelledby="tour-title" aria-describedby="tour-text"><div class="card tour">
+    <p class="dots" aria-label="${i + 1} / ${steps.length}">${steps.map((_, k) => `<span class="${k === i ? 'on' : ''}"></span>`).join('')}</p>
+    <div class="tour-art" aria-hidden="true">${tourArt(step.art)}</div>
+    <h2 id="tour-title" tabindex="-1">${esc(step.title)}</h2>
+    <p id="tour-text" class="tour-text">${esc(text)}</p>
     <div class="row">${i > 0 ? `<button class="btn big" data-act="tour-step" data-v="-1">${esc(t('back'))}</button>` : `<button class="btn big" data-act="tour-done">${esc(t('skip'))}</button>`}
     <button class="btn primary big" id="tour-next" data-act="${last ? 'tour-done' : 'tour-step'}" data-v="1">${esc(last ? t('finish') : t('next'))}</button></div></div></div>`;
 }
@@ -556,7 +675,14 @@ root.addEventListener('click', e => {
   if (act === 'auth-mode') { S.authMode = v; S.flash = null; S.resetInputs = true; return render(); }
   if (act === 'toggle-supervisor') { S.showSupervisor = el.checked; return render(); }
   if (act === 'demo-login') return run(() => api.demoSignIn(id));
-  if (act === 'tab') { S.tab = v; S.flash = null; S.editQ = null; S.previewOpen = false; S.newInvite = null; S.resetInputs = true; return loadTab(); }
+  if (act === 'tab') { if (S.tab !== v) history.pushState({tab: v}, ''); return goTab(v); }
+  if (act === 'range') {
+    const to = shiftDate();
+    S.filters = {...S.filters, from: daysBefore(to, Number(v)), to};
+    return run(async () => { await loadReports(); });
+  }
+  if (act === 'ack') return run(async () => { await api.ackNote(id); await loadInbox(); });
+  if (act === 'del-note') { if (!confirm(t('confirmRemoveNote'))) return; return run(async () => { await api.deleteNote(id); await loadNotes(); }); }
   if (act === 'sign-out') return run(async () => { await api.signOut(); });
   if (act === 'reset-demo') { api.resetDemo(); location.reload(); return; }
   if (act === 'tour') { S.tour = 0; render(); return focusTour(); }
@@ -604,12 +730,38 @@ root.addEventListener('click', e => {
   if (act === 'copy-code') { navigator.clipboard?.writeText(S.newInvite).then(() => flash(t('copied'))).catch(() => {}); }
 });
 
+function goTab(v) {
+  S.tab = v; S.flash = null; S.editQ = null; S.previewOpen = false; S.newInvite = null; S.resetInputs = true; S.open = new Set();
+  return loadTab();
+}
+// Android back button / swipe back moves between tabs instead of leaving the site.
+window.addEventListener('popstate', e => {
+  if (S.screen !== 'app' || !S.me) return;
+  const allowed = S.me.role === 'rod' ? ['reports', 'notes', 'checklists', 'team', 'help'] : ['today', 'history', 'help'];
+  const v = e.state && allowed.includes(e.state.tab) ? e.state.tab : allowed[0];
+  if (S.tour !== null) { S.tour = null; render(); return; }
+  goTab(v);
+});
+// Opening a report marks its notes as read.
+root.addEventListener('toggle', e => {
+  const d = e.target;
+  if (!(d instanceof HTMLDetailsElement) || !d.dataset.sub) return;
+  if (d.open) S.open.add(d.dataset.sub); else { S.open.delete(d.dataset.sub); return; }
+  const unread = S.comments.filter(c => c.submission_id === d.dataset.sub && unreadForMe(c));
+  if (!unread.length) return;
+  api.markCommentsRead(d.dataset.sub).then(() => {
+    const now = new Date().toISOString();
+    for (const c of unread) { if (S.me.role === 'rod') c.read_by_rod_at = now; else c.read_by_lead_at = now; }
+    setTimeout(render, 1500);
+  }).catch(() => {});
+}, true);
+
 async function afterPeopleChange(id) {
   if (id === S.me.id) { await loadSession(); return; }
   await loadTeam();
 }
 
-function focusTour() { setTimeout(() => document.getElementById('tour-text')?.focus(), 0); }
+function focusTour() { setTimeout(() => document.getElementById('tour-title')?.focus(), 0); }
 
 root.addEventListener('change', e => {
   const el = e.target;
@@ -667,6 +819,29 @@ root.addEventListener('submit', e => {
     if (S.screen === 'recovery') await loadSession();
   });
   if (kind === 'report') return submitReport();
+  if (kind === 'comment') {
+    const body = String(f.get('body') || '').trim();
+    if (!body) { flash(t('commentEmpty'), 'err'); return; }
+    const sub = form.dataset.sub;
+    return run(async () => {
+      await api.addComment(sub, body, f.get('question') || null);
+      S.open.add(sub);
+      S.comments = S.me.role === 'rod' ? await api.listComments(S.reports.map(r => r.id)) : await api.listMyComments();
+      S.flash = {text: t('saved'), kind: 'ok'};
+    });
+  }
+  if (kind === 'note') {
+    const body = String(f.get('body') || '').trim();
+    if (!body) { flash(t('noteEmpty'), 'err'); return; }
+    const [scope, tid] = String(f.get('target')).split(':');
+    const until = f.get('until');
+    return run(async () => {
+      await api.saveNote({scope, group_id: scope === 'group' ? tid : null, person_id: scope === 'person' ? tid : null, body,
+        expires_at: until ? new Date(until + 'T23:59:59-06:00').toISOString() : null});
+      await loadNotes();
+      S.flash = {text: t('saved'), kind: 'ok'};
+    });
+  }
   if (kind === 'question') return saveQuestionForm(form);
   if (kind === 'group') return run(async () => { await api.saveGroup({name: String(f.get('name')).trim()}); await loadTeam(); });
   if (kind === 'invite') return run(async () => {

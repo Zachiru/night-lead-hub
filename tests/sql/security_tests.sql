@@ -165,4 +165,57 @@ select t.ok(public.redeem_rod_invite('latercode123'), 'valid invite upgrades an 
 select t.ok(public.is_rod(), 'upgraded account is now a supervisor');
 reset role;
 select t.ok(public.current_shift_date() is not null, 'shift date is computed on the server');
+
+-- ============================== supervisor notes and report comments
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+create temp table if not exists ids (k text primary key, v uuid);
+grant all on ids to authenticated;
+insert into ids select 'subA', id from submissions where lead_id = '00000000-0000-0000-0000-000000000003' and revision = 2;
+select t.ok((public.add_report_comment((select v from ids where k = 'subA'), 'Please also check the gym doors')->>'body') like 'Please%', 'supervisor can comment on a report');
+select t.ok((public.add_report_comment((select v from ids where k = 'subA'), 'Floors look wet?', '10000000-0000-0000-0000-000000000003')->>'question_id') is not null, 'supervisor can comment on one answer');
+select t.ok(t.err($q$select public.add_report_comment((select v from ids where k = 'subA'), 'x', 'not-a-question')$q$) like '%invalid_question%', 'comment on a question not in the report is rejected');
+select t.ok(t.err($q$select public.add_report_comment((select v from ids where k = 'subA'), '   ')$q$) like '%invalid_comment%', 'empty comment rejected');
+insert into shift_notes (scope, body) values ('everyone', 'Note for everyone');
+insert into shift_notes (scope, group_id, body) values ('group', '00000000-0000-0000-0000-0000000000a1', 'Note for Building A');
+insert into shift_notes (scope, person_id, body) values ('person', '00000000-0000-0000-0000-000000000005', 'Note for Lead C');
+insert into shift_notes (scope, body, expires_at) values ('everyone', 'Old note', now() - interval '1 hour');
+select t.ok((select count(*) from shift_notes where created_by = auth.uid() and created_by_name = 'ROD A') = 4, 'notes record which supervisor wrote them');
+reset role;
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000003', false);
+set role authenticated;
+select t.ok((select count(*) from report_comments where author_name = 'ROD A') = 2, 'Lead A sees the comments (with supervisor name) on their own report');
+select t.ok((select count(*) from report_comments where read_by_lead_at is null) = 2, 'new comments start unread');
+select public.mark_comments_read((select v from ids where k = 'subA'));
+select t.ok((select count(*) from report_comments where read_by_lead_at is null) = 0, 'Lead A can mark them read');
+select t.ok((public.add_report_comment((select v from ids where k = 'subA'), 'Done, doors checked')->>'author_id')::uuid = auth.uid(), 'Lead A can reply on their own report');
+select t.ok(t.err($q$insert into report_comments (submission_id, lead_id, author_id, body) values ((select v from ids where k = 'subA'), auth.uid(), auth.uid(), 'x')$q$) like '%permission denied%', 'Lead A cannot write comments directly');
+select t.ok(t.err($q$update report_comments set body = 'changed'$q$) like '%permission denied%', 'Lead A cannot edit supervisor comments');
+select t.ok(t.err($q$delete from report_comments$q$) = '' and (select count(*) from report_comments) = 3, 'Lead A cannot delete comments');
+select t.ok((select string_agg(body, '|' order by body) from shift_notes) = 'Note for Building A|Note for everyone', 'Lead A sees everyone + own group notes only (no expired, no others)');
+select public.ack_note((select id from shift_notes where body = 'Note for everyone'));
+select t.ok(t.err($q$select public.ack_note((select id from shift_notes where body = 'Note for Building A' limit 1))$q$) = '', 'Lead A can tap Got it');
+reset role;
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000003', false);
+set role authenticated;
+select t.ok(t.err($q$select public.ack_note('00000000-0000-0000-0000-00000000ffff')$q$) like '%not_allowed%', 'cannot acknowledge a note that does not exist or is not yours');
+select t.ok(t.err($q$insert into shift_notes (scope, body) values ('everyone', 'fake boss note')$q$) <> '', 'Lead A cannot post notes');
+reset role;
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000005', false);
+set role authenticated;
+select t.ok((select count(*) from report_comments) = 0, 'Lead C cannot see Lead A''s comments');
+select t.ok((select count(*) from shift_notes) = 3, 'Lead C sees everyone, group and personal notes');
+select t.ok(t.err($q$select public.ack_note((select id from shift_notes where body = 'Note for Lead C'))$q$) = '', 'Lead C acknowledges their personal note');
+select t.ok(t.err($q$select public.add_report_comment((select v from ids where k = 'subA'), 'butting in')$q$) like '%not_allowed%', 'Lead C cannot comment on Lead A''s report');
+reset role;
+
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000001', false);
+set role authenticated;
+select t.ok((select count(*) from note_acks) = 3, 'supervisor sees who tapped Got it');
+select t.ok((select count(*) from report_comments where read_by_rod_at is null) = 1, 'supervisor sees the reply as unread');
+select public.mark_comments_read((select v from ids where k = 'subA'));
+select t.ok((select count(*) from report_comments where read_by_rod_at is null) = 0, 'supervisor can mark replies read');
+reset role;
 \echo ALL SQL TESTS PASSED

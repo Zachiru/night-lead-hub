@@ -33,9 +33,13 @@ function seed() {
   };
 }
 
+const noteVisible = (n, u) => (!n.expires_at || new Date(n.expires_at) > new Date())
+  && (n.scope === 'everyone' || (n.scope === 'group' && n.group_id && n.group_id === u.group_id) || (n.scope === 'person' && n.person_id === u.id));
+
 export function createDemoApi() {
   let db;
   try { db = JSON.parse(localStorage.getItem(KEY)) || seed(); } catch { db = seed(); }
+  db.comments ||= []; db.notes ||= []; db.acks ||= [];
   const save = () => { try { localStorage.setItem(KEY, JSON.stringify(db)); } catch { /* private mode: memory only */ } };
   let listener = () => {};
   const me = () => db.users.find(u => u.id === db.session && u.enabled) || null;
@@ -170,5 +174,44 @@ export function createDemoApi() {
       save(); return code;
     },
     async revokeInvite(code) { rod(); db.invites = db.invites.filter(i => i.code !== code); save(); },
+
+    async listComments(ids) { rod(); return clone(db.comments.filter(c => ids.includes(c.submission_id))); },
+    async listMyComments() { const u = active(); return clone(db.comments.filter(c => c.lead_id === u.id)); },
+    async addComment(submissionId, body, questionId) {
+      const u = active();
+      const s = db.submissions.find(x => x.id === submissionId);
+      if (!s || !(u.role === 'rod' || s.lead_id === u.id)) throw new ApiError('not_allowed');
+      if (questionId && !s.questions.some(q => q.id === questionId)) throw new ApiError('invalid_question');
+      const text = String(body || '').trim();
+      if (!text || text.length > 1000) throw new ApiError('invalid_comment');
+      const now = new Date().toISOString();
+      const c = {id: uuid(), submission_id: s.id, lead_id: s.lead_id, question_id: questionId || null, author_id: u.id, author_name: u.display_name,
+        body: text, created_at: now, read_by_lead_at: u.id === s.lead_id ? now : null, read_by_rod_at: u.role === 'rod' ? now : null};
+      db.comments.push(c); save(); return clone(c);
+    },
+    async deleteComment(id) { rod(); db.comments = db.comments.filter(c => c.id !== id); save(); },
+    async markCommentsRead(submissionId) {
+      const u = active(); const now = new Date().toISOString();
+      for (const c of db.comments) {
+        if (c.submission_id !== submissionId) continue;
+        if (u.role === 'rod' && !c.read_by_rod_at) c.read_by_rod_at = now;
+        if (u.role !== 'rod' && c.lead_id === u.id && !c.read_by_lead_at) c.read_by_lead_at = now;
+      }
+      save();
+    },
+    async listNotes() {
+      const u = active();
+      if (u.role === 'rod') return clone(db.notes);
+      return clone(db.notes.filter(n => noteVisible(n, u)));
+    },
+    async saveNote(n) { const u = rod(); db.notes.unshift({id: uuid(), group_id: null, person_id: null, expires_at: null, ...n, created_by: u.id, created_by_name: u.display_name, created_at: new Date().toISOString()}); save(); },
+    async deleteNote(id) { rod(); db.notes = db.notes.filter(n => n.id !== id); db.acks = db.acks.filter(a => a.note_id !== id); save(); },
+    async listAcks() { const u = active(); return clone(u.role === 'rod' ? db.acks : db.acks.filter(a => a.user_id === u.id)); },
+    async ackNote(id) {
+      const u = active(); const n = db.notes.find(x => x.id === id);
+      if (!n || !noteVisible(n, u)) throw new ApiError('not_allowed');
+      if (!db.acks.some(a => a.note_id === id && a.user_id === u.id)) db.acks.push({note_id: id, user_id: u.id, acked_at: new Date().toISOString()});
+      save();
+    },
   };
 }

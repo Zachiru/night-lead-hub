@@ -29,10 +29,10 @@ const signInDemo = async name => { await page.getByRole('button', {name: new Reg
 const finishTour = async () => {
   const tour = page.getByRole('dialog');
   await tour.waitFor();
-  for (let i = 0; i < 6 && await tour.isVisible(); i++) await page.locator('#tour-next').click();
+  for (let i = 0; i < 12 && await tour.isVisible(); i++) await page.locator('#tour-next').click();
 };
 const groupRow = name => page.locator('.people li', {has: page.locator('strong', {hasText: new RegExp('^' + name + '$')})});
-const tab = name => page.locator('nav.tabs').getByRole('button', {name, exact: true}).click();
+const tab = name => page.locator('nav.tabs').getByRole('button', {name: new RegExp('^' + name)}).click();
 const signOut = async () => { await tab('Help'); await page.getByRole('button', {name: 'Sign out'}).click(); await page.getByText('Pick a demo account').waitFor(); };
 const noSideScroll = async label => {
   const w = await page.evaluate(() => [document.documentElement.scrollWidth, window.innerWidth]);
@@ -55,6 +55,7 @@ test('Night Lead: tour, required answers, honest negatives, confirmation, histor
   await page.getByText('Shift of').waitFor();
   assert.equal(await page.locator('nav.tabs button').count(), 3, 'Night Leads see only Today / My reports / Help');
   await noSideScroll('today');
+  await page.getByText('0 of 4 answered').waitFor();
   await page.getByRole('button', {name: 'Send report'}).click();
   await page.getByText('Please answer the highlighted questions.').waitFor();
   assert.equal(await page.locator('fieldset.has-error').count(), 3);
@@ -62,6 +63,7 @@ test('Night Lead: tour, required answers, honest negatives, confirmation, histor
   assert.match(focused, /Restrooms/, 'focus moves to the first unanswered question');
   await answer('Restrooms', 'No');
   await answer('Doors locked', 'Not completed');
+  await page.getByText('2 of 4 answered').waitFor();
   // Draft survives a reload.
   await page.reload();
   await page.getByText('Draft on this phone').waitFor();
@@ -162,6 +164,63 @@ test('Supervisor: group question, personal change, restore, hide', async () => {
   await page.waitForFunction(() => !document.body.innerText.includes('Changed here'));
 });
 
+test('Notes and comments: supervisor to Night Lead and back, private to that person', async () => {
+  await tab('Reports'); // still signed in as the supervisor from the previous test
+  // Comment on Lead A's report: whole report + one answer.
+  await page.locator('details.report summary', {hasText: 'Demo Lead A'}).click();
+  const rep = page.locator('details.report', {hasText: 'Demo Lead A'});
+  await rep.locator('textarea').fill('Good job. Please mop the gym tomorrow.');
+  await rep.getByRole('button', {name: 'Send note'}).click();
+  await rep.getByText('Good job. Please mop the gym tomorrow.').waitFor();
+  await rep.locator('select').selectOption({label: 'Floors (sample)'});
+  await rep.locator('textarea').fill('Which floor needed attention?');
+  await rep.getByRole('button', {name: 'Send note'}).click();
+  await rep.getByText('Which floor needed attention?').waitFor();
+  // Pinned note for Building A only.
+  await tab('Notes');
+  await noSideScroll('notes');
+  await page.locator('#n-target').selectOption({label: 'Building A (sample)'});
+  await page.locator('#n-body').fill('Starting tonight, lock the side gate too.');
+  await page.getByRole('button', {name: 'Post note'}).click();
+  await page.getByText('Read by 0 of 1').waitFor();
+  // Range buttons and back button.
+  await tab('Reports');
+  await page.getByRole('button', {name: 'Last 7 days'}).click();
+  await page.waitForFunction(() => document.querySelector('#f-from').value !== document.querySelector('#f-to').value);
+  await page.goBack();
+  await page.getByText('Post note').waitFor();
+  await signOut();
+
+  await signInDemo('Demo Lead B');
+  await page.getByText('Shift of').waitFor();
+  assert.equal(await page.getByText('lock the side gate').count(), 0, 'Building A note not shown to Lead B');
+  await tab('My reports');
+  assert.equal(await page.getByText('mop the gym').count(), 0);
+  await signOut();
+
+  await signInDemo('Demo Lead A');
+  await page.getByText('lock the side gate').waitFor();
+  assert.match(await page.locator('nav.tabs').innerText(), /Today\s*1/, 'badge on Today for the unread note');
+  await page.getByRole('button', {name: 'Got it ✓'}).click();
+  await page.getByText('✓ You read this').waitFor();
+  assert.match(await page.locator('nav.tabs').innerText(), /My reports\s*2/, 'badge for 2 unread comments');
+  await tab('My reports');
+  const mine = page.locator('details.report').first();
+  await mine.locator('summary').click();
+  await mine.getByText('Please mop the gym tomorrow.').waitFor();
+  await mine.getByText('Which floor needed attention?').waitFor();
+  await mine.locator('textarea').fill('The floor by the gym. It is fixed now.');
+  await mine.getByRole('button', {name: 'Send reply'}).click();
+  await mine.getByText('It is fixed now.').waitFor();
+  await page.waitForFunction(() => !/My reports\s*\d/.test(document.querySelector('nav.tabs').innerText), null, {timeout: 5000});
+  await signOut();
+
+  await signInDemo('Demo Supervisor');
+  await page.locator('details.report summary', {hasText: 'New reply'}).waitFor();
+  await tab('Notes');
+  await page.getByText('Read by 1 of 1').waitFor();
+});
+
 test('Team: groups, invite codes, supervisor sign-up, last supervisor protected', async () => {
   await tab('Team');
   await noSideScroll('team');
@@ -185,7 +244,7 @@ test('Team: groups, invite codes, supervisor sign-up, last supervisor protected'
   await page.getByRole('button', {name: 'Create account'}).click();
   await finishTour();
   await page.getByText('Supervisor (ROD)').first().waitFor();
-  assert.equal(await page.locator('nav.tabs button').count(), 4);
+  assert.equal(await page.locator('nav.tabs button').count(), 5);
   await signOut();
 
   await page.locator('#su-name').fill('Sneaky');
@@ -193,7 +252,7 @@ test('Team: groups, invite codes, supervisor sign-up, last supervisor protected'
   await page.locator('#su-code').fill(code);
   await page.getByRole('button', {name: 'Create account'}).click();
   await page.getByText('didn’t work').waitFor();
-  assert.equal(await page.locator('nav.tabs button').count(), 4 - 1 + 0, 'used code gives a Night Lead account');
+  assert.equal(await page.locator('nav.tabs button').count(), 3, 'used code gives a Night Lead account');
 });
 
 test('Small phone (320px): no sideways scrolling', async () => {

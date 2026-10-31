@@ -446,6 +446,130 @@ create policy invites_rod on public.rod_invites for all to authenticated using (
 drop policy if exists audit_read on public.audit_events;
 create policy audit_read on public.audit_events for select to authenticated using (is_rod());
 
+-- ---------------------------------------------------------------- supervisor notes and report comments
+
+-- Comments on a submitted report (optionally about one question). Supervisors write them;
+-- the Night Lead who sent the report can read them and reply. Nobody else sees them.
+create table if not exists public.report_comments (
+  id uuid primary key default gen_random_uuid(),
+  submission_id uuid not null references public.submissions(id) on delete cascade,
+  lead_id uuid not null references public.profiles(id) on delete cascade,
+  question_id text check (question_id is null or length(question_id) <= 80),
+  author_id uuid not null references public.profiles(id) on delete cascade,
+  author_name text,
+  body text not null check (length(btrim(body)) between 1 and 1000),
+  created_at timestamptz not null default now(),
+  read_by_lead_at timestamptz,
+  read_by_rod_at timestamptz
+);
+create index if not exists report_comments_lead_idx on public.report_comments (lead_id);
+create index if not exists report_comments_sub_idx on public.report_comments (submission_id);
+
+-- Pinned notes from supervisors ("starting tonight, also check the gym doors").
+-- Shown at the top of the Night Lead's Today screen for everyone, a group, or one person.
+create table if not exists public.shift_notes (
+  id uuid primary key default gen_random_uuid(),
+  scope text not null check (scope in ('everyone', 'group', 'person')),
+  group_id uuid references public.groups(id) on delete cascade,
+  person_id uuid references public.profiles(id) on delete cascade,
+  body text not null check (length(btrim(body)) between 1 and 1000),
+  created_by uuid references public.profiles(id) on delete set null,
+  created_by_name text,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz,
+  check (
+    (scope = 'everyone' and group_id is null and person_id is null) or
+    (scope = 'group' and group_id is not null and person_id is null) or
+    (scope = 'person' and person_id is not null and group_id is null)
+  )
+);
+
+-- "Got it" taps, so supervisors can see who has read a note.
+create table if not exists public.note_acks (
+  note_id uuid not null references public.shift_notes(id) on delete cascade,
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  acked_at timestamptz not null default now(),
+  primary key (note_id, user_id)
+);
+
+create or replace function public.my_group() returns uuid
+language sql stable security definer set search_path = public as $$
+  select group_id from profiles where id = auth.uid();
+$$;
+
+create or replace function public.note_visible_to_me(n public.shift_notes) returns boolean
+language sql stable security definer set search_path = public as $$
+  select is_active() and (n.expires_at is null or n.expires_at > now()) and (
+    n.scope = 'everyone' or (n.scope = 'group' and n.group_id = my_group()) or (n.scope = 'person' and n.person_id = auth.uid()));
+$$;
+
+create or replace function public.add_report_comment(p_submission uuid, p_body text, p_question text default null)
+returns jsonb language plpgsql security definer set search_path = public as $$
+declare s submissions; c report_comments;
+begin
+  if not is_active() then raise exception 'not_allowed' using errcode = '42501'; end if;
+  select * into s from submissions where id = p_submission;
+  if s.id is null or not (is_rod() or s.lead_id = auth.uid()) then raise exception 'not_allowed' using errcode = '42501'; end if;
+  if p_question is not null and not exists (select 1 from jsonb_array_elements(s.questions) q where q->>'id' = p_question) then
+    raise exception 'invalid_question' using errcode = '22023';
+  end if;
+  if p_body is null or length(btrim(p_body)) not between 1 and 1000 then raise exception 'invalid_comment' using errcode = '22023'; end if;
+  insert into report_comments (submission_id, lead_id, question_id, author_id, author_name, body, read_by_lead_at, read_by_rod_at)
+  values (s.id, s.lead_id, p_question, auth.uid(), (select display_name from profiles where id = auth.uid()), btrim(p_body),
+          case when auth.uid() = s.lead_id then now() end, case when is_rod() then now() end)
+  returning * into c;
+  return to_jsonb(c);
+end $$;
+
+-- Marks the comments on one report as read by the person looking at them.
+create or replace function public.mark_comments_read(p_submission uuid) returns void
+language plpgsql security definer set search_path = public as $$
+begin
+  if is_rod() then
+    update report_comments set read_by_rod_at = now() where submission_id = p_submission and read_by_rod_at is null;
+  elsif is_active() then
+    update report_comments set read_by_lead_at = now()
+     where submission_id = p_submission and lead_id = auth.uid() and read_by_lead_at is null;
+  end if;
+end $$;
+
+create or replace function public.ack_note(p_note uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare n shift_notes;
+begin
+  select * into n from shift_notes where id = p_note;
+  if n.id is null or not note_visible_to_me(n) then raise exception 'not_allowed' using errcode = '42501'; end if;
+  insert into note_acks (note_id, user_id) values (p_note, auth.uid()) on conflict do nothing;
+end $$;
+
+create or replace function public.stamp_note() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  new.created_by := coalesce(auth.uid(), new.created_by);
+  new.created_by_name := (select display_name from profiles where id = new.created_by);
+  return new;
+end $$;
+drop trigger if exists shift_notes_stamp on public.shift_notes;
+create trigger shift_notes_stamp before insert on public.shift_notes for each row execute function public.stamp_note();
+
+alter table public.report_comments enable row level security;
+alter table public.shift_notes enable row level security;
+alter table public.note_acks enable row level security;
+
+drop policy if exists comments_read on public.report_comments;
+create policy comments_read on public.report_comments for select to authenticated
+  using ((lead_id = auth.uid() and is_active()) or is_rod());
+drop policy if exists comments_rod_delete on public.report_comments;
+create policy comments_rod_delete on public.report_comments for delete to authenticated using (is_rod());
+
+drop policy if exists notes_read on public.shift_notes;
+create policy notes_read on public.shift_notes for select to authenticated using (is_rod() or note_visible_to_me(shift_notes));
+drop policy if exists notes_write on public.shift_notes;
+create policy notes_write on public.shift_notes for all to authenticated using (is_rod()) with check (is_rod());
+
+drop policy if exists acks_read on public.note_acks;
+create policy acks_read on public.note_acks for select to authenticated using (user_id = auth.uid() or is_rod());
+
 -- ---------------------------------------------------------------- grants
 
 -- Supabase grants broad default privileges; start from nothing, then allow only what is needed.
@@ -460,4 +584,9 @@ grant execute on function public.is_rod(), public.is_active(), public.current_sh
   public.my_checklist(), public.rod_preview(uuid, uuid, boolean),
   public.submit_report(jsonb, text), public.create_rod_invite(int, int, text),
   public.redeem_rod_invite(text) to authenticated;
+grant select, delete on public.report_comments to authenticated;
+grant select, insert, update, delete on public.shift_notes to authenticated;
+grant select on public.note_acks to authenticated;
+grant execute on function public.my_group(), public.note_visible_to_me(public.shift_notes),
+  public.add_report_comment(uuid, text, text), public.mark_comments_read(uuid), public.ack_note(uuid) to authenticated;
 -- resolve_questions and log_event stay internal (no direct client access).

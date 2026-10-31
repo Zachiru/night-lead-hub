@@ -2,10 +2,12 @@
 
 A small, phone-friendly website for daily night-shift checklists.
 
-- **Night Leads** sign up, fill in a short checklist each night (big buttons, a little typing), and see their own past reports.
+- **Night Leads** sign up, fill in a short checklist each night (big buttons, a little typing), and see their own past reports,
+  plus any notes their supervisor left them. They can reply.
 - **Supervisors (ROD)** see everyone's reports, who hasn't sent one yet, and any problems; edit the checklist for
-  everyone, a group, or one person; manage the team; and download reports as **Excel, CSV or PDF**.
-- English and Spanish, with a short tour for each role.
+  everyone, a group, or one person; comment on reports; pin notes for everyone, a group or one person (and see who read them);
+  manage the team; and download reports as **Excel, CSV or PDF**.
+- English and Spanish, an illustrated tour for each role, and it can be added to the home screen like an app (iPhone and Android).
 - Nobody needs a ChatGPT or Claude account: just an email and a password.
 
 Everyone who signs up is a Night Lead. Supervisor access needs an invite code from an existing supervisor

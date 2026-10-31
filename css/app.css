@@ -2,7 +2,7 @@
   --bg: #f4f6f9; --card: #fff; --text: #14202e; --muted: #536173; --line: #d5dce5;
   --brand: #1f3a60; --brand-text: #fff; --ok: #1d6b3a; --ok-bg: #e3f4e8; --err: #a1261b; --err-bg: #fbe7e5;
   --warn: #8a4b00; --warn-bg: #fff2dc; --on: #1f3a60; --focus: #ffb000;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 17px; line-height: 1.45;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; font-size: 18px; line-height: 1.45;
 }
 @media (prefers-color-scheme: dark) {
   :root { --bg: #0f1520; --card: #182231; --text: #eef2f7; --muted: #a9b5c4; --line: #2c3a4e; --brand: #3e6aa6;
@@ -76,5 +76,43 @@ details.report .meta { display: block; }
 .tour { max-width: 26rem; width: 100%; } .tour-text { font-size: 1.15rem; min-height: 5.5rem; }
 .dots { display: flex; gap: .4rem; justify-content: center; } .dots span { width: 10px; height: 10px; border-radius: 50%; background: var(--line); } .dots span.on { background: var(--on); }
 .tour .row .btn { flex: 1; }
-@media (max-width: 380px) { .filters { grid-template-columns: 1fr; } :root { font-size: 16px; } }
+@media (max-width: 380px) { .filters { grid-template-columns: 1fr; } :root { font-size: 17px; } }
 @media print { .tabs, .top, .sticky-submit, .demo-banner { display: none; } }
+
+/* badges, progress, notes and comments */
+.badge { display: inline-block; min-width: 1.4em; padding: .05rem .45rem; border-radius: 99px; background: #c2410c; color: #fff; font-size: .75rem; font-weight: 700; text-align: center; vertical-align: middle; }
+.progress { text-align: center; margin: 0 0 .4rem; font-weight: 700; color: var(--muted); }
+.ico { font-size: 1.15em; margin-right: .35rem; }
+.notes h2 { font-size: 1.05rem; }
+.note { border-left: 6px solid #c2410c; }
+.note.acked { border-left-color: var(--line); opacity: .8; }
+.note-body { font-size: 1.05rem; margin: 0 0 .4rem; white-space: pre-wrap; }
+.done-mark { color: var(--ok); font-weight: 700; margin: .3rem 0 0; }
+.comment { background: var(--bg); border-radius: 10px; padding: .5rem .7rem; margin: .4rem 0; border-left: 4px solid var(--on); }
+.comment.from-lead { border-left-color: var(--ok); }
+.comment p { margin: 0; white-space: pre-wrap; }
+.comment .meta { margin-bottom: .2rem; }
+.answers li { display: block; }
+.answers .ans { display: flex; justify-content: space-between; gap: 1rem; }
+.comment-form { margin-top: .8rem; border-top: 1px dashed var(--line); padding-top: .8rem; }
+h3 { font-size: 1rem; margin: .8rem 0 .3rem; }
+.ranges { margin-bottom: .6rem; }
+details.faq { border-top: 1px solid var(--line); padding: .5rem 0; }
+details.faq summary { font-weight: 700; min-height: 44px; cursor: pointer; display: flex; align-items: center; }
+details.faq p { margin: .3rem 0 .4rem; }
+
+/* tour pictures */
+.tour h2 { font-size: 1.3rem; margin: .6rem 0 .4rem; }
+.tour-art { background: var(--bg); border-radius: 12px; padding: .8rem; min-height: 6.5rem; display: grid; align-content: center; gap: .5rem; pointer-events: none; }
+.art-logo { width: 4rem; height: 4rem; border-radius: 1rem; background: var(--brand); color: #fff; display: grid; place-items: center; font-size: 2.2rem; font-weight: 800; margin: 0 auto; }
+.q.mini { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: .5rem .7rem; }
+.q.mini .legend { font-weight: 700; margin-bottom: .3rem; }
+.q.mini .choice { min-height: 42px; }
+.mini-btn { background: var(--brand); color: #fff; border-radius: 10px; padding: .6rem; text-align: center; font-weight: 700; }
+.mini-btn.small { display: inline-block; padding: .35rem .8rem; }
+.mini-sent { margin: 0; padding: .5rem .7rem; }
+.mini-note { margin: 0; }
+.mini-list { display: grid; gap: .3rem; background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: .5rem .7rem; }
+.mini-tabs { display: flex; justify-content: space-around; background: var(--card); border-radius: 10px; padding: .5rem; font-weight: 600; color: var(--muted); }
+.mini-tabs .on { color: var(--text); border-bottom: 3px solid var(--on); }
+.tour { max-height: 92vh; overflow-y: auto; }
