@@ -1,0 +1,13 @@
+{
+  "template": {
+    "version": "SYNTHETIC_DEMO_1",
+    "questions": [
+      {"id":"restrooms","label":"Restrooms checked?","type":"yes_no","required":true,"enabled":true,"order":10},
+      {"id":"equipment","label":"Equipment secured?","type":"checkbox","required":true,"enabled":true,"order":20},
+      {"id":"issues","label":"Issue status","type":"status","required":true,"enabled":true,"allowNotApplicable":true,"order":30},
+      {"id":"notes","label":"Shift notes","type":"text","required":false,"enabled":true,"order":40}
+    ]
+  },
+  "overrides": {"lead_b":{"notes":{"required":true},"restrooms":{"enabled":false}}},
+  "personalQuestions": {"lead_b":[{"id":"assigned_area","label":"Assigned-area note","type":"text","required":true,"enabled":true,"order":15}]}
+}

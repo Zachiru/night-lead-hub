@@ -1,0 +1,53 @@
+{
+  "project": "Night Lead Hub",
+  "date": "2026-10-30",
+  "live_site_modified": false,
+  "verified_passing_tests": 25,
+  "artifacts": [
+    {
+      "path": "00_START_HERE.md",
+      "bytes": 5680,
+      "sha256": "732c599c1bed2bee3727b7d4ea318744bbaf4464e5f8b307a03d24f89ee5d55b"
+    },
+    {
+      "path": "01_PRODUCT_AND_ACCESS_PLAN.md",
+      "bytes": 6433,
+      "sha256": "4cefb4cb865b29974b4cc85c3094446f52121fa49614813a0a646d83a442b6a0"
+    },
+    {
+      "path": "02_RELEASE_QA.md",
+      "bytes": 3791,
+      "sha256": "d91624ef426eac8dc2ea9ed19def086bda37c4c3cccdedcc929165a399d5da8f"
+    },
+    {
+      "path": "03_INTEGRATION.md",
+      "bytes": 3659,
+      "sha256": "69ac074d559ac8998656114d6aa1efe594a2cac1e0587558560f3c87948e13ba"
+    },
+    {
+      "path": "CLAUDE_COPY_PASTE.md",
+      "bytes": 1879,
+      "sha256": "d2f7cb7d22f7115301accd15311d5ac9f88392ac61dc0987cdbebc90ebc9b564"
+    },
+    {
+      "path": "Night_Lead_Hub_OFFLINE_DEMO.html",
+      "bytes": 28554,
+      "sha256": "3e853b1326bf0ec742d70abae1b4901a692bd18744058a92e73c6f360eefeeed"
+    },
+    {
+      "path": "fixtures/synthetic_config.json",
+      "bytes": 772,
+      "sha256": "a479564b042578ac3655c240ad33cc0628fe1a01e3a9558e3ba95fb8d6ab8c27"
+    },
+    {
+      "path": "src/checklist_rules.mjs",
+      "bytes": 7499,
+      "sha256": "6cda5748eae0d995f87935eca65aa3e17c9b5c947cdff820a7b60bfaf06ee8d9"
+    },
+    {
+      "path": "tests/checklist_rules.test.mjs",
+      "bytes": 5966,
+      "sha256": "5954f7eab642d212242229bf7a7fec832371b705f81d183b7d6c727c6e1a13c0"
+    }
+  ]
+}

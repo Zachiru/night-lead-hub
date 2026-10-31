@@ -1,0 +1,27 @@
+{
+  "groups": [
+    {"id": "00000000-0000-0000-0000-0000000000a1", "name": "Group 1"},
+    {"id": "00000000-0000-0000-0000-0000000000a2", "name": "Group 2"}
+  ],
+  "people": [
+    {"id": "00000000-0000-0000-0000-000000000011", "group_id": "00000000-0000-0000-0000-0000000000a1"},
+    {"id": "00000000-0000-0000-0000-000000000012", "group_id": "00000000-0000-0000-0000-0000000000a1"},
+    {"id": "00000000-0000-0000-0000-000000000013", "group_id": "00000000-0000-0000-0000-0000000000a2"},
+    {"id": "00000000-0000-0000-0000-000000000014", "group_id": null}
+  ],
+  "questions": [
+    {"id": "20000000-0000-0000-0000-000000000003", "scope": "everyone", "group_id": null, "person_id": null, "type": "status", "label": "C", "label_es": "C-es", "required": true, "enabled": true, "allow_na": true, "sort_order": 10},
+    {"id": "20000000-0000-0000-0000-000000000001", "scope": "everyone", "group_id": null, "person_id": null, "type": "yes_no", "label": "A", "label_es": null, "required": true, "enabled": true, "allow_na": false, "sort_order": 10},
+    {"id": "20000000-0000-0000-0000-000000000002", "scope": "everyone", "group_id": null, "person_id": null, "type": "checkbox", "label": "B", "label_es": null, "required": false, "enabled": false, "allow_na": false, "sort_order": 20},
+    {"id": "20000000-0000-0000-0000-000000000004", "scope": "group", "group_id": "00000000-0000-0000-0000-0000000000a1", "person_id": null, "type": "text", "label": "G1 only", "label_es": "Solo G1", "required": true, "enabled": true, "allow_na": false, "sort_order": 15},
+    {"id": "20000000-0000-0000-0000-000000000005", "scope": "person", "group_id": null, "person_id": "00000000-0000-0000-0000-000000000013", "type": "text", "label": "P13 only", "label_es": null, "required": false, "enabled": true, "allow_na": false, "sort_order": 1.5},
+    {"id": "20000000-0000-0000-0000-000000000006", "scope": "everyone", "group_id": null, "person_id": null, "type": "text", "label": "Notes", "label_es": null, "required": false, "enabled": true, "allow_na": false, "sort_order": 40}
+  ],
+  "overrides": [
+    {"id": "30000000-0000-0000-0000-000000000001", "question_id": "20000000-0000-0000-0000-000000000006", "group_id": "00000000-0000-0000-0000-0000000000a1", "person_id": null, "label": "Group notes", "label_es": "Notas grupo", "required": true, "enabled": null, "allow_na": null, "sort_order": 5},
+    {"id": "30000000-0000-0000-0000-000000000002", "question_id": "20000000-0000-0000-0000-000000000006", "group_id": null, "person_id": "00000000-0000-0000-0000-000000000012", "label": null, "label_es": null, "required": false, "enabled": null, "allow_na": null, "sort_order": null},
+    {"id": "30000000-0000-0000-0000-000000000003", "question_id": "20000000-0000-0000-0000-000000000002", "group_id": "00000000-0000-0000-0000-0000000000a2", "person_id": null, "label": null, "label_es": null, "required": null, "enabled": true, "allow_na": null, "sort_order": null},
+    {"id": "30000000-0000-0000-0000-000000000004", "question_id": "20000000-0000-0000-0000-000000000001", "group_id": null, "person_id": "00000000-0000-0000-0000-000000000011", "label": null, "label_es": null, "required": null, "enabled": false, "allow_na": true, "sort_order": null},
+    {"id": "30000000-0000-0000-0000-000000000005", "question_id": "20000000-0000-0000-0000-000000000004", "group_id": null, "person_id": "00000000-0000-0000-0000-000000000011", "label": "G1 for P11", "label_es": null, "required": false, "enabled": null, "allow_na": null, "sort_order": 99}
+  ]
+}
