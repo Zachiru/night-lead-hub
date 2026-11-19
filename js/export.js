@@ -21,7 +21,7 @@ export function formatAnswer(q, t) {
   if (a === 'no') return t('no');
   if (a === 'done') return t('done');
   if (a === 'needs_attention') return t('needsAttention');
-  if (a === 'not_applicable') return t('na');
+  if (a === 'not_applicable') return t('naChoice'); // same words as the button the Night Lead tapped
   return String(a);
 }
 

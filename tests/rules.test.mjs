@@ -74,7 +74,7 @@ test('export tables: one row per report, one row per answer, answers translated'
     comments: [{submission_id: 's1', question_id: 'q2', author_name: 'Nora', body: 'Check again'}, {submission_id: 'other', author_name: 'X', body: 'no'}]});
   assert.equal(noted.wide[0].at(-1), 'Nora (Floors): Check again');
   assert.equal(out.long.length, 2);
-  assert.equal(formatAnswer({type: 'yes_no', answer: 'not_applicable'}, t), 'N/A');
+  assert.equal(formatAnswer({type: 'yes_no', answer: 'not_applicable'}, t), 'No aplica');
 });
 test('every Spanish string exists for every English key', async () => {
   const {STRINGS} = await import('../js/i18n.js');
