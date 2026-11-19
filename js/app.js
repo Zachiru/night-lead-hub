@@ -21,7 +21,7 @@ const store = {
 const S = {
   lang: store.get('nlh-lang') || ((navigator.language || '').startsWith('es') ? 'es' : 'en'),
   me: null, tab: null, screen: 'loading', authMode: 'signin', busy: false, flash: null,
-  checklist: null, answers: {}, errors: {}, sent: null, editing: false, token: null, myReports: null,
+  checklist: null, answers: {}, lastAnswers: {}, errors: {}, sent: null, editing: false, token: null, myReports: null,
   people: [], groups: [], questions: [], overrides: [], reports: [], invites: [], newInvite: null,
   filters: null, target: 'everyone', editQ: null, previewOpen: false, tour: null, showSupervisor: false,
   resetInputs: false, // true = next render starts forms fresh instead of keeping typed text
@@ -143,6 +143,9 @@ async function loadChecklist() {
   const ids = new Set(S.checklist.questions.map(q => q.id));
   const draft = store.get(draftKey()) || {};
   S.answers = Object.fromEntries(Object.entries(draft).filter(([k]) => ids.has(k)));
+  // What was sent last time, so "Change and send again" starts from those answers instead of a blank form.
+  S.lastAnswers = Object.fromEntries((S.checklist.latest?.questions || [])
+    .filter(q => ids.has(q.id) && q.answer !== null && q.answer !== undefined && q.answer !== '').map(q => [q.id, q.answer]));
   S.errors = {};
   S.editing = false;
   S.sent = S.checklist.latest ? {submitted_at: S.checklist.latest.submitted_at, revision: S.checklist.latest.revision, shift_date: S.checklist.latest.shift_date} : null;
@@ -333,7 +336,9 @@ function viewToday() {
       <button class="btn big" data-act="edit-again">${esc(t('editResend'))}</button></section>`;
   }
   if (!c.questions.length) return `${head}<p class="card">${esc(t('noQuestions'))}</p>`;
-  const status = hasDraft ? `<p class="status draft">${esc(t('statusDraft'))}</p>` : (S.sent ? `<p class="status">${esc(t('statusSent', {time: fmtClock(S.sent.submitted_at)}))}</p>` : `<p class="status how">${esc(t('howToFill'))}</p>`);
+  const status = S.sent && S.editing ? `<p class="status how">${esc(t('editingHint'))}</p>
+      <p><button type="button" class="btn" data-act="cancel-edit">${esc(t('keepSent'))}</button></p>`
+    : hasDraft ? `<p class="status draft">${esc(t('statusDraft'))}</p>` : (S.sent ? `<p class="status">${esc(t('statusSent', {time: fmtClock(S.sent.submitted_at)}))}</p>` : `<p class="status how">${esc(t('howToFill'))}</p>`);
   const errCount = Object.keys(S.errors).length;
   return `${head}${status}
     <form data-form="report" novalidate>
@@ -817,7 +822,8 @@ root.addEventListener('click', e => {
     return;
   }
   if (act === 'voice-toggle') { setVoice(!S.voiceOn); if (S.voiceOn) speak(t('voiceOnSample'), S.lang); return render(); }
-  if (act === 'edit-again') { S.editing = true; S.token = null; return render(); }
+  if (act === 'edit-again') { S.editing = true; S.token = null; if (!Object.keys(S.answers).length) S.answers = {...S.lastAnswers}; return render(); }
+  if (act === 'cancel-edit') { S.editing = false; S.answers = {}; S.errors = {}; store.del(draftKey()); return render(); }
   if (act === 'export') return run(() => exportReports(v, filteredReports(), {people: S.people, groups: S.groups, comments: S.comments, lang: S.lang, t, from: S.filters.from, to: S.filters.to}));
   if (act === 'add-q') { S.editQ = {type: 'checkbox', label: '', label_es: '', required: true, allow_na: false}; S.resetInputs = true; render(); return document.getElementById('qf-type')?.focus(); }
   if (act === 'cancel-q') { S.editQ = null; S.resetInputs = true; return render(); }
@@ -1032,7 +1038,7 @@ async function submitReport() {
     try {
       const res = await api.submitReport(check.answers, S.token);
       store.del(draftKey());
-      S.sent = res; S.editing = false; S.answers = {}; S.errors = {}; S.token = null;
+      S.sent = res; S.editing = false; S.lastAnswers = {...check.answers}; S.answers = {}; S.errors = {}; S.token = null;
       S.checklist.latest = res;
       if (S.voiceOn) speak(t('sentSpoken'), S.lang);
     } catch (e) {

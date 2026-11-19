@@ -67,6 +67,7 @@ export const STRINGS = {
     confirmDeleteShared: 'Delete this question for EVERYONE? Past reports keep their answers.',
     noQuestionsHere: 'No questions yet. Tap “Add question”.', labelRequired: 'Please type the question.',
 
+    editingHint: 'These are the answers you sent. Change what you need, then tap “Send report” again.', keepSent: 'Keep what I sent',
     ioTitle: 'Import or download this list', ioIntro: 'Already have the checklist in Excel? Bring it in here instead of typing every question.',
     ioDownload: 'Download this list', ioTemplate: 'Get a blank template', ioPick: 'Choose an Excel or CSV file',
     ioHow: 'One question per row. Only the first column (the question) is needed. The other columns are: Question in Spanish, Answer type, Required, and Allow “Doesn’t apply”.',
@@ -208,6 +209,7 @@ export const STRINGS = {
     confirmDeleteShared: '¿Borrar esta pregunta para TODOS? Los reportes anteriores conservan sus respuestas.',
     noQuestionsHere: 'Aún no hay preguntas. Toque “Agregar pregunta”.', labelRequired: 'Escriba la pregunta.',
 
+    editingHint: 'Estas son las respuestas que envió. Cambie lo que necesite y toque “Enviar reporte” otra vez.', keepSent: 'Dejar lo que envié',
     ioTitle: 'Importar o descargar esta lista', ioIntro: '¿Ya tiene la lista en Excel? Súbala aquí en vez de escribir cada pregunta.',
     ioDownload: 'Descargar esta lista', ioTemplate: 'Obtener una plantilla en blanco', ioPick: 'Elija un archivo de Excel o CSV',
     ioHow: 'Una pregunta por fila. Solo se necesita la primera columna (la pregunta). Las otras columnas son: Pregunta en español, Tipo de respuesta, Obligatoria y Permitir “No aplica”.',

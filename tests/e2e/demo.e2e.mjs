@@ -322,6 +322,34 @@ test('Supervisor: import a checklist from a file, download it again, share links
   await page.getByText('Supervisor (ROD)').first().waitFor();
 });
 
+test('Night Lead: "Change and send again" starts from the answers already sent', async () => {
+  await fresh();
+  await signInDemo('Demo Lead B');
+  await finishTour();
+  for (const f of await page.locator('fieldset.q').all()) { const c = f.locator('label.choice').first(); if (await c.count()) await c.click(); }
+  await page.locator('textarea').first().fill('First version');
+  await page.locator('#send-report').click();
+  await page.getByText('Report sent').waitFor();
+  await page.getByRole('button', {name: 'Change and send again'}).click();
+  await page.getByText('These are the answers you sent.').waitFor();
+  const total = await page.locator('fieldset.q').count();
+  assert.equal(await page.locator('label.choice.on').count(), total - 1, 'every button answer is already picked');
+  assert.equal(await page.locator('textarea').first().inputValue(), 'First version');
+  await page.getByText(`${total} of ${total} answered`).waitFor();
+  // Backing out keeps the report that was sent.
+  await page.getByRole('button', {name: 'Keep what I sent'}).click();
+  await page.getByText('Report sent').waitFor();
+  // Changing one answer and sending makes update #2 with the other answers kept.
+  await page.getByRole('button', {name: 'Change and send again'}).click();
+  await page.locator('textarea').first().fill('Second version');
+  await page.locator('#send-report').click();
+  await page.getByText('Update #2').waitFor();
+  await page.reload();
+  await page.getByRole('button', {name: 'Change and send again'}).click();
+  assert.equal(await page.locator('textarea').first().inputValue(), 'Second version', 'still there after reloading');
+  assert.equal(await page.locator('label.choice.on').count(), total - 1);
+});
+
 test('Small phone (320px): no sideways scrolling', async () => {
   await fresh({viewport: {width: 320, height: 640}});
   await noSideScroll('sign-in 320');

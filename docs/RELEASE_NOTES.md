@@ -12,15 +12,18 @@
 - **Share links** (Team tab): one link for Night Leads that opens straight on "make my account", and for each supervisor
   invite code a link with the code already filled in. Copy and (on phones) Share buttons.
 - **Report downloads now include notes**: a "Notes on the report" column in Excel/CSV and a notes row in the PDF.
+- **Change and send again** now starts from the answers already sent (it used to start blank), with a "Keep what I sent" way out.
 - **Fixed:** on phones the date and filter boxes on Reports stuck out past their card.
-- Wording: "N/A" in the checklist editor now says "Doesn't apply", matching what Night Leads see.
+- Wording: "N/A" now says "Doesn't apply" everywhere (editor, saved reports, downloads), matching the button Night Leads tap.
 
 ## Tested (automated, all passing)
 | Area | Result |
 |---|---|
 | Checklist logic, export, translations, voice recordings | 45/45 |
 | Checklist import and download (headers in any order, no headers, Spanish, bad rows, round trip) | 7/7 |
-| Real pages in Chromium at 390px and 320px, demo mode (incl. import, downloads, share links) | 8/8 |
+| Real pages in Chromium at 390px and 320px, demo mode (incl. import, downloads, share links) | 9/9 |
+| Live site + real database, two throwaway accounts: sign-in, supervisor code, Excel import, report, notes, downloads, permissions | 19/19 (run once on 2026-11-19, test data removed) |
+| Live site in WebKit (Safari's engine) at iPhone size, read-only | 16/16 |
 
 ---
 
