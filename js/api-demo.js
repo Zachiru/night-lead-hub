@@ -65,6 +65,8 @@ export function createDemoApi() {
       return {needsConfirm: false};
     },
     async signIn() { throw new ApiError('demo_only'); },
+    async signInWithGoogle() { throw new ApiError('demo_only'); },
+    async googleEnabled() { return false; },
     async signOut() { db.session = null; save(); listener('SIGNED_OUT', false); },
     async sendReset() { throw new ApiError('demo_only'); },
     async setNewPassword() { throw new ApiError('demo_only'); },

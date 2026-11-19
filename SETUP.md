@@ -35,6 +35,24 @@ In Supabase, **Authentication**:
   otherwise sign-up and reset emails may be delayed.
 - Optional: **Policies → Password strength** to require longer passwords.
 
+## 4b. Sign in with Google (recommended: no passwords, no confirmation emails)
+The site shows a big **Continue with Google** button as soon as Google is switched on in Supabase; until then it shows
+email and password. To switch it on (about 10 minutes, free):
+1. Go to <https://console.cloud.google.com/>, sign in with any Google account, and create a project (any name, e.g. `night-lead-hub`).
+2. **APIs & Services → OAuth consent screen**: choose **External**, app name `Night Lead Hub`, your email as support and
+   developer contact. Save. Then **Publish app** (otherwise only test users you list can sign in). The app only asks for
+   name and email, so Google doesn't need to review it.
+3. **APIs & Services → Credentials → Create credentials → OAuth client ID**, type **Web application**.
+   - Authorized JavaScript origins: `https://zachiru.github.io`
+   - Authorized redirect URIs: `https://mybxlabuznlcjonxyecz.supabase.co/auth/v1/callback`
+   - Create, then copy the **Client ID** and **Client secret**.
+4. In Supabase: **Authentication → Sign In / Providers → Google**: turn it on, paste the Client ID and Client secret, Save.
+5. Make sure step 4's **URL Configuration** has the site address (Site URL and Redirect URLs), or Google sends people back
+   to the wrong page.
+
+Supervisors: open the invite link from the Team tab (or enter the code under Help after signing in). The code is used
+right after the Google sign-in.
+
 ## 5. Connect the website to Supabase
 1. In Supabase, open **Project Settings → API**. Copy the **Project URL** and the **anon public** key.
    (The anon key is meant to be public. Never copy the `service_role` key anywhere.)

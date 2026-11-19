@@ -150,3 +150,9 @@ details.io > * + * { margin-top: .7rem; }
 .linkbox { display: grid; gap: .5rem; }
 .linkbox input { font-size: .85rem; color: var(--muted); }
 .share { border-left: 6px solid var(--on); }
+
+/* Google sign-in */
+.btn.google { display: flex; align-items: center; justify-content: center; gap: .6rem; background: #fff; color: #1f1f1f; border: 1px solid #747775; }
+.btn.google .g { display: inline-grid; place-items: center; width: 1.6rem; height: 1.6rem; border-radius: 50%; font-weight: 800;
+  background: conic-gradient(#ea4335 0 25%, #fbbc05 0 50%, #34a853 0 75%, #4285f4 0); color: #fff; font-family: Arial, sans-serif; }
+.other-way { margin: .8rem 0 0; text-align: center; }

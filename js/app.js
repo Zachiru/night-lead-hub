@@ -29,6 +29,8 @@ const S = {
   voiceOn: voiceSupported && store.get('nlh-voice') === true, // read the tour and answers out loud
   io: null, ioOpen: false, // checklist import: {items, skipped, fileName} waiting for the supervisor's OK
   join: null, // opened from a shared link: {code} (code is '' for a Night Lead link)
+  emailOpen: false, // sign-in screen shows Google first; email and password only if asked
+  googleOn: false, // Google sign-in is switched on in Supabase (checked at start)
 };
 // Shared links: "?join" opens the make-an-account form; "?invite=CODE" also fills in a supervisor code.
 {
@@ -36,8 +38,10 @@ const S = {
   if (qs.has('join') || qs.has('invite')) {
     const code = (qs.get('invite') || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 40);
     S.join = {code};
-    S.authMode = 'signup';
+    S.authMode = 'signin';
+    S.joinPending = true; // becomes the sign-up form if Google sign-in isn't switched on
     S.showSupervisor = !!code;
+    if (code) store.set('nlh-google-code', code);
     qs.delete('join'); qs.delete('invite');
     const rest = qs.toString();
     history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
@@ -108,6 +112,16 @@ async function loadSession() {
   if (S.me.locale && S.me.locale !== S.lang) { S.lang = S.me.locale; t = translator(S.lang); store.set('nlh-lang', S.lang); document.documentElement.lang = S.lang; }
   if (store.get('nlh-pending-invite') && S.me.role !== 'rod') S.flash = {text: t('inviteInvalidNotice'), kind: 'warn'};
   store.del('nlh-pending-invite');
+  const savedCode = store.get('nlh-google-code');
+  if (savedCode) {
+    store.del('nlh-google-code');
+    if (S.me.role !== 'rod') {
+      try {
+        if (await api.redeemInvite(savedCode)) { S.me = await api.getMe(); S.flash = {text: t('redeemOk'), kind: 'ok'}; }
+        else S.flash = {text: t('inviteInvalidNotice'), kind: 'warn'};
+      } catch (e) { console.error(e); S.flash = {text: t('inviteInvalidNotice'), kind: 'warn'}; }
+    }
+  }
   S.screen = 'app';
   S.tab = S.me.role === 'rod' ? 'reports' : 'today';
   history.replaceState({tab: S.tab}, '');
@@ -224,6 +238,10 @@ function viewAuth() {
         ${supervisorField()}
         <button class="btn primary big" ${S.busy ? 'disabled' : ''}>${esc(t('signUp'))}</button>
       </form>`;
+  } else if (m === 'signin' && !S.emailOpen && S.googleOn) {
+    body = `<div class="stack">${googleButton()}
+      <p class="hint">${esc(t('googleHint'))}</p></div>
+      <p class="other-way"><button class="link" data-act="email-open">${esc(t('useEmailInstead'))}</button></p>`;
   } else if (m === 'signin') {
     body = `<form data-form="signin" class="stack" novalidate>
         <label>${esc(t('email'))}<input id="si-email" name="email" type="email" required autocomplete="email" inputmode="email"></label>
@@ -233,7 +251,8 @@ function viewAuth() {
       </form>
       <p><button class="link" data-act="auth-mode" data-v="forgot">${esc(t('forgotPassword'))}</button></p>
       <div class="first-time"><p>${esc(t('noAccount'))}</p>
-        <button class="btn big" data-act="auth-mode" data-v="signup">${esc(t('firstTimeButton'))}</button></div>`;
+        <button class="btn big" data-act="auth-mode" data-v="signup">${esc(t('firstTimeButton'))}</button></div>
+      ${S.googleOn ? `<p class="other-way"><button class="link" data-act="email-close">${esc(t('backToGoogle'))}</button></p>` : ''}`;
   } else if (m === 'signup') {
     body = `<form data-form="signup" class="stack" novalidate>
         <label>${esc(t('name'))}<input id="su-name" name="name" required maxlength="80" autocomplete="name"></label>
@@ -254,9 +273,13 @@ function viewAuth() {
   } else if (m === 'check-email') {
     body = `<p class="flash ok">${esc(t('checkEmail'))}</p><p><button class="btn big" data-act="auth-mode" data-v="signin">${esc(t('signIn'))}</button></p>`;
   }
-  const welcome = S.join && (m === 'signup' || api.mode === 'demo') ? `<p class="status how">${esc(S.join.code ? t('joinSupervisor') : t('joinWelcome'))}</p>` : '';
+  const welcome = S.join && (m === 'signup' || api.mode === 'demo' || (m === 'signin' && !S.emailOpen && S.googleOn)) ? `<p class="status how">${esc(S.join.code ? t('joinSupervisor') : t('joinWelcome'))}</p>` : '';
   return `<main class="auth"><header class="auth-head"><h1>${esc(t('appName'))}</h1>${langSwitch()}</header>
     ${flashBox()}${welcome}<section class="card">${m === 'signup' || api.mode === 'demo' ? '' : `<h2>${esc(m === 'forgot' ? t('forgotPassword') : t('signIn'))}</h2>`}${body}</section></main>`;
+}
+
+function googleButton() {
+  return `<button class="btn big google" data-act="google" ${S.busy ? 'disabled' : ''}><span class="g" aria-hidden="true">G</span> ${esc(t('continueGoogle'))}</button>`;
 }
 
 // Lets people see what they typed, so a typo in the password isn't a mystery.
@@ -791,7 +814,10 @@ root.addEventListener('click', e => {
   if (!el || el.tagName === 'SELECT') return;
   const act = el.dataset.act, v = el.dataset.v, id = el.dataset.id;
   if (act === 'lang') return setLang(v);
-  if (act === 'auth-mode') { S.authMode = v; S.flash = null; S.resetInputs = true; return render(); }
+  if (act === 'auth-mode') { S.authMode = v; S.flash = null; S.resetInputs = true; if (v === 'signup' || v === 'forgot') S.emailOpen = true; return render(); }
+  if (act === 'email-open') { S.emailOpen = true; S.flash = null; return render(); }
+  if (act === 'email-close') { S.emailOpen = false; S.authMode = 'signin'; S.flash = null; return render(); }
+  if (act === 'google') return run(() => api.signInWithGoogle());
   if (act === 'toggle-supervisor') { S.showSupervisor = el.checked; return render(); }
   if (act === 'demo-login') return run(() => api.demoSignIn(id));
   if (act === 'tab') { if (S.tab !== v) history.pushState({tab: v}, ''); return goTab(v); }
@@ -1100,4 +1126,10 @@ api.onAuthChange((event, signedIn, userId) => {
   if (event === 'SIGNED_IN' || event === 'USER_UPDATED') loadSession();
 });
 document.documentElement.lang = S.lang;
+// Check whether Google sign-in is on before showing the sign-in screen; without it, show email and password.
+api.googleEnabled().then(on => {
+  S.googleOn = on;
+  if (!on && S.joinPending && !S.me) { S.authMode = 'signup'; }
+  if (S.screen === 'auth') render();
+});
 loadSession().catch(e => { console.error(e); S.screen = 'auth'; S.flash = {text: errorText(e), kind: 'err'}; render(); });

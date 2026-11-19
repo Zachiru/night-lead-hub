@@ -68,6 +68,9 @@ export const STRINGS = {
     noQuestionsHere: 'No questions yet. Tap “Add question”.', labelRequired: 'Please type the question.',
 
     editingHint: 'These are the answers you sent. Change what you need, then tap “Send report” again.', keepSent: 'Keep what I sent',
+    continueGoogle: 'Continue with Google', googleHint: 'Use your Google account. First time? This also makes your account.',
+    useEmailInstead: 'Use email and password instead', backToGoogle: 'Back to Google sign-in',
+    googleCodeKept: 'Your supervisor code is saved. It is used after you sign in.',
     ioTitle: 'Import or download this list', ioIntro: 'Already have the checklist in Excel? Bring it in here instead of typing every question.',
     ioDownload: 'Download this list', ioTemplate: 'Get a blank template', ioPick: 'Choose an Excel or CSV file',
     ioHow: 'One question per row. Only the first column (the question) is needed. The other columns are: Question in Spanish, Answer type, Required, and Allow “Doesn’t apply”.',
@@ -84,7 +87,7 @@ export const STRINGS = {
     shareTitle: 'Invite your Night Leads', shareIntro: 'Send this link to your Night Leads. They tap it, make an account, and fill in their checklist.',
     copyLink: 'Copy link', shareSend: 'Share…', shareText: 'Night Lead Hub: tap this link, make your account, and fill in your nightly checklist.',
     inviteLinkHint: 'Or send this link. The code is already filled in:',
-    joinWelcome: 'Welcome! Make your account to get started.', joinSupervisor: 'Your supervisor code is filled in. Make your account to get supervisor access.',
+    joinWelcome: 'Welcome! Tap “Continue with Google” to get started.', joinSupervisor: 'Your supervisor code is saved. Tap “Continue with Google” to get supervisor access.',
     notesCol: 'Notes on the report',
 
     people: 'People', groups: 'Groups', invites: 'Supervisor invite codes', active: 'Active', disabled: 'Turned off',
@@ -210,6 +213,9 @@ export const STRINGS = {
     noQuestionsHere: 'Aún no hay preguntas. Toque “Agregar pregunta”.', labelRequired: 'Escriba la pregunta.',
 
     editingHint: 'Estas son las respuestas que envió. Cambie lo que necesite y toque “Enviar reporte” otra vez.', keepSent: 'Dejar lo que envié',
+    continueGoogle: 'Continuar con Google', googleHint: 'Use su cuenta de Google. ¿Primera vez? Esto también crea su cuenta.',
+    useEmailInstead: 'Usar correo y contraseña', backToGoogle: 'Volver a entrar con Google',
+    googleCodeKept: 'Su código de supervisor está guardado. Se usa después de entrar.',
     ioTitle: 'Importar o descargar esta lista', ioIntro: '¿Ya tiene la lista en Excel? Súbala aquí en vez de escribir cada pregunta.',
     ioDownload: 'Descargar esta lista', ioTemplate: 'Obtener una plantilla en blanco', ioPick: 'Elija un archivo de Excel o CSV',
     ioHow: 'Una pregunta por fila. Solo se necesita la primera columna (la pregunta). Las otras columnas son: Pregunta en español, Tipo de respuesta, Obligatoria y Permitir “No aplica”.',
@@ -226,7 +232,7 @@ export const STRINGS = {
     shareTitle: 'Invite a sus Night Leads', shareIntro: 'Envíe este enlace a sus Night Leads. Lo tocan, crean su cuenta y llenan su lista.',
     copyLink: 'Copiar enlace', shareSend: 'Compartir…', shareText: 'Night Lead Hub: toque este enlace, cree su cuenta y llene su lista de cada noche.',
     inviteLinkHint: 'O envíe este enlace. El código ya viene escrito:',
-    joinWelcome: '¡Bienvenido! Cree su cuenta para empezar.', joinSupervisor: 'Su código de supervisor ya está escrito. Cree su cuenta para tener acceso de supervisor.',
+    joinWelcome: '¡Bienvenido! Toque “Continuar con Google” para empezar.', joinSupervisor: 'Su código de supervisor está guardado. Toque “Continuar con Google” para tener acceso de supervisor.',
     notesCol: 'Notas en el reporte',
 
     people: 'Personas', groups: 'Grupos', invites: 'Códigos de invitación de supervisor', active: 'Activa', disabled: 'Desactivada',

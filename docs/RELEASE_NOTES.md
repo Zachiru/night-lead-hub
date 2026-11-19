@@ -9,6 +9,9 @@
   **Replace the list**. Works for Everyone, a group, or one person.
 - **Download the checklist** as Excel or CSV in the same layout, and a **blank template** with one example per answer type.
   A downloaded file can be edited and imported again.
+- **Sign in with Google**: a big "Continue with Google" button (makes the account the first time; names come from Google).
+  Shows only once Google is switched on in Supabase (SETUP.md step 4b); until then the email sign-in is shown. Email and
+  password stay available under "Use email and password instead". Supervisor invite links work with Google too.
 - **Share links** (Team tab): one link for Night Leads that opens straight on "make my account", and for each supervisor
   invite code a link with the code already filled in. Copy and (on phones) Share buttons.
 - **Report downloads now include notes**: a "Notes on the report" column in Excel/CSV and a notes row in the PDF.

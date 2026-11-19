@@ -311,7 +311,7 @@ test('Supervisor: import a checklist from a file, download it again, share links
   await signOut();
 
   await page.goto(URL_ + '&join');
-  await page.getByText('Welcome! Make your account to get started.').waitFor();
+  await page.getByText('Welcome! Tap “Continue with Google” to get started.').waitFor();
   assert.ok(!page.url().includes('join'), 'the link cleans itself from the address bar');
   await page.goto(URL_ + '&invite=' + code.toLowerCase());
   assert.equal(await page.locator('#su-code').inputValue(), code);

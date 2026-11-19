@@ -342,9 +342,11 @@ begin
   end if;
   insert into profiles (id, email, display_name, role, locale)
   values (new.id, new.email,
-    left(coalesce(nullif(btrim(new.raw_user_meta_data->>'display_name'), ''), split_part(new.email, '@', 1), 'New user'), 80),
+    -- display_name from our sign-up form; full_name / name come from Google sign-in.
+    left(coalesce(nullif(btrim(new.raw_user_meta_data->>'display_name'), ''), nullif(btrim(new.raw_user_meta_data->>'full_name'), ''),
+      nullif(btrim(new.raw_user_meta_data->>'name'), ''), split_part(new.email, '@', 1), 'New user'), 80),
     r,
-    case when new.raw_user_meta_data->>'locale' = 'es' then 'es' else 'en' end);
+    case when new.raw_user_meta_data->>'locale' like 'es%' then 'es' else 'en' end);
   insert into audit_events (actor, action, target, detail)
   values (new.id, 'account_created', new.id::text, jsonb_build_object('role', r));
   return new;

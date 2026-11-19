@@ -54,6 +54,17 @@ export function createSupabaseApi({supabaseUrl, supabaseAnonKey}) {
       return {needsConfirm: !res.session};
     },
     async signIn(email, password) { data(await sb.auth.signInWithPassword({email, password})); },
+    // Is "Sign in with Google" switched on in the Supabase project? (Public setting; no sign-in needed.)
+    async googleEnabled() {
+      try {
+        const r = await fetch(supabaseUrl + '/auth/v1/settings', {headers: {apikey: supabaseAnonKey}});
+        return !!(r.ok && (await r.json())?.external?.google);
+      } catch { return false; }
+    },
+    // Google sign-in: leaves the page for Google and comes back signed in (no password, no confirmation email).
+    async signInWithGoogle() {
+      data(await sb.auth.signInWithOAuth({provider: 'google', options: {redirectTo: siteUrl(), queryParams: {prompt: 'select_account'}}}));
+    },
     async signOut() { await sb.auth.signOut(); uid = null; },
     async sendReset(email) { data(await sb.auth.resetPasswordForEmail(email, {redirectTo: siteUrl()})); },
     async setNewPassword(password) { data(await sb.auth.updateUser({password})); },
