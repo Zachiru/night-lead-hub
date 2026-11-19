@@ -66,8 +66,13 @@ test('export tables: one row per report, one row per answer, answers translated'
   const report = {lead_id: 'p1', shift_date: '2026-11-02', submitted_at: '2026-11-03T04:00:00Z', revision: 1, total: 2, answered: 2, needs_attention: 1, not_completed: 1,
     questions: [{id: 'q1', type: 'checkbox', label: 'Doors', label_es: 'Puertas', answer: false}, {id: 'q2', type: 'status', label: 'Floors', label_es: null, answer: 'needs_attention'}]};
   const out = buildTables([report], {people: [{id: 'p1', display_name: 'Lead', group_id: 'g'}], groups: [{id: 'g', name: 'G'}], lang: 'es', t});
-  assert.deepEqual(out.wideHeaders.slice(-2), ['Puertas', 'Floors']);
-  assert.deepEqual(out.wide[0].slice(-2), ['No completado', 'Necesita atención']);
+  assert.deepEqual(out.wideHeaders.slice(-3, -1), ['Puertas', 'Floors']);
+  assert.deepEqual(out.wide[0].slice(-3, -1), ['No completado', 'Necesita atención']);
+  assert.equal(out.wideHeaders.at(-1), 'Notas en el reporte');
+  assert.equal(out.wide[0].at(-1), '');
+  const noted = buildTables([{...report, id: 's1'}], {people: [], groups: [], lang: 'en', t: translator('en'),
+    comments: [{submission_id: 's1', question_id: 'q2', author_name: 'Nora', body: 'Check again'}, {submission_id: 'other', author_name: 'X', body: 'no'}]});
+  assert.equal(noted.wide[0].at(-1), 'Nora (Floors): Check again');
   assert.equal(out.long.length, 2);
   assert.equal(formatAnswer({type: 'yes_no', answer: 'not_applicable'}, t), 'N/A');
 });

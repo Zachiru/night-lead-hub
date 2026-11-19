@@ -130,3 +130,23 @@ fieldset.q legend { width: 100%; align-items: center; }
 .tour-top .dots { margin: 0; }
 fieldset.q legend { flex-wrap: nowrap; gap: .6rem; }
 .speak { flex: 0 0 auto; min-width: 42px; min-height: 42px; }
+
+/* layout fixes: fields never push past their card on a narrow phone */
+.filters > label, .row > label, .grow { min-width: 0; }
+.filters input, .filters select { min-width: 0; max-width: 100%; }
+input[type=date] { -webkit-appearance: none; appearance: none; }
+details.report summary { padding: .1rem 0; }
+
+/* checklist import and share links */
+details.io > summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; }
+details.io[open] > summary { margin-bottom: .4rem; }
+details.io > * + * { margin-top: .7rem; }
+.filepick { display: flex; align-items: center; justify-content: center; text-align: center; border: 2px dashed var(--on); color: var(--on); position: relative; }
+.filepick:focus-within { outline: 3px solid var(--focus); outline-offset: 2px; }
+.io-list, .io-skipped { margin: .4rem 0; padding-left: 1.4rem; }
+.io-list li { padding: .35rem 0; border-top: 1px solid var(--line); }
+.io-list li:first-child { border-top: 0; }
+.io-preview h3 { margin-top: 0; word-break: break-word; }
+.linkbox { display: grid; gap: .5rem; }
+.linkbox input { font-size: .85rem; color: var(--muted); }
+.share { border-left: 6px solid var(--on); }

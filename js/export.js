@@ -2,7 +2,7 @@
 // The Excel and PDF libraries are bundled in /vendor and loaded only when needed.
 
 const loaded = {};
-function loadScript(src) {
+export function loadScript(src) {
   if (!loaded[src]) {
     loaded[src] = new Promise((resolve, reject) => {
       const s = document.createElement('script');
@@ -32,20 +32,25 @@ export function formatTime(iso, lang, timeZone = 'America/Chicago') {
 const qLabel = (q, lang) => (lang === 'es' && q.label_es) ? q.label_es : q.label;
 
 /** Turns reports into one row per report (questions as columns) and one row per answer. */
-export function buildTables(reports, {people, groups, lang, t}) {
+export function buildTables(reports, {people, groups, lang, t, comments = []}) {
   const person = id => people.find(p => p.id === id);
   const groupName = id => groups.find(g => g.id === id)?.name || '';
   const columns = [];
   for (const r of reports) for (const q of r.questions) {
     if (!columns.some(c => c.id === q.id)) columns.push({id: q.id, label: qLabel(q, lang)});
   }
+  // Notes written on a report (by supervisors, and replies), as one cell: "Name: text" per line.
+  const notesFor = r => comments.filter(c => c.submission_id === r.id).map(c => {
+    const about = c.question_id ? r.questions.find(q => q.id === c.question_id) : null;
+    return `${c.author_name || '?'}${about ? ` (${qLabel(about, lang)})` : ''}: ${c.body}`;
+  }).join('\n');
   const baseHeaders = [t('shiftDate'), t('nameCol'), t('group'), t('sentAt'), '#', t('answeredCol'), t('needsAttention'), t('notCompleted')];
-  const wideHeaders = [...baseHeaders, ...columns.map(c => c.label)];
+  const wideHeaders = [...baseHeaders, ...columns.map(c => c.label), t('notesCol')];
   const wide = reports.map(r => {
     const p = person(r.lead_id);
     const byId = Object.fromEntries(r.questions.map(q => [q.id, formatAnswer(q, t)]));
     return [r.shift_date, p?.display_name || '?', groupName(p?.group_id), formatTime(r.submitted_at, lang), r.revision,
-      `${r.answered}/${r.total}`, r.needs_attention, r.not_completed, ...columns.map(c => byId[c.id] ?? '')];
+      `${r.answered}/${r.total}`, r.needs_attention, r.not_completed, ...columns.map(c => byId[c.id] ?? ''), notesFor(r)];
   });
   const longHeaders = [t('shiftDate'), t('nameCol'), t('group'), t('sentAt'), '#', t('question'), t('answer')];
   const long = [];
@@ -53,7 +58,7 @@ export function buildTables(reports, {people, groups, lang, t}) {
     const p = person(r.lead_id);
     for (const q of r.questions) long.push([r.shift_date, p?.display_name || '?', groupName(p?.group_id), formatTime(r.submitted_at, lang), r.revision, qLabel(q, lang), formatAnswer(q, t)]);
   }
-  return {wideHeaders, wide, longHeaders, long};
+  return {wideHeaders, wide, longHeaders, long, notesFor};
 }
 
 /** CSV cell. Cells starting with = + - @ are prefixed so spreadsheets don't run them as formulas. */
@@ -67,7 +72,7 @@ export function toCsv(headers, rows) {
   return '﻿' + [headers, ...rows].map(r => r.map(csvCell).join(',')).join('\r\n');
 }
 
-function download(blob, filename) {
+export function download(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename; document.body.appendChild(a); a.click(); a.remove();
@@ -75,7 +80,7 @@ function download(blob, filename) {
 }
 
 export async function exportReports(format, reports, ctx) {
-  const {wideHeaders, wide, longHeaders, long} = buildTables(reports, ctx);
+  const {wideHeaders, wide, longHeaders, long, notesFor} = buildTables(reports, ctx);
   const name = `night-lead-reports_${ctx.from}_${ctx.to}`;
   if (format === 'csv') {
     download(new Blob([toCsv(wideHeaders, wide)], {type: 'text/csv;charset=utf-8'}), name + '.csv');
@@ -99,7 +104,7 @@ export async function exportReports(format, reports, ctx) {
       const title = `${r.shift_date} · ${p?.display_name || '?'} · ${ctx.t('sentAt')} ${formatTime(r.submitted_at, ctx.lang)}${r.revision > 1 ? ' · #' + r.revision : ''}`;
       doc.autoTable({
         startY: y, head: [[{content: title, colSpan: 2}], [ctx.t('question'), ctx.t('answer')]],
-        body: r.questions.map(q => [qLabel(q, ctx.lang), formatAnswer(q, ctx.t)]),
+        body: [...r.questions.map(q => [qLabel(q, ctx.lang), formatAnswer(q, ctx.t)]), ...(notesFor(r) ? [[ctx.t('notesCol'), notesFor(r)]] : [])],
         styles: {fontSize: 9, cellPadding: 4}, headStyles: {fillColor: [31, 58, 96]}, margin: {left: 40, right: 40},
       });
       y = doc.lastAutoTable.finalY + 16;

@@ -153,6 +153,11 @@ export function createDemoApi() {
       else db.questions.push({group_id: null, person_id: null, enabled: true, allow_na: false, ...q, id: uuid()});
       save();
     },
+    async addQuestions(list) {
+      rod();
+      for (const q of list) db.questions.push({group_id: null, person_id: null, enabled: true, allow_na: false, ...q, id: uuid()});
+      save();
+    },
     async deleteQuestion(id) {
       rod();
       db.questions = db.questions.filter(q => q.id !== id);

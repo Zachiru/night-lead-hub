@@ -1,3 +1,29 @@
+# Night Lead Hub v0.3 (2026-11-19): checklist import, share links, online
+
+**Status: online at https://zachiru.github.io/night-lead-hub/** (GitHub Pages, public repository).
+
+## New in v0.3
+- **Import a checklist from Excel or CSV** (Checklists tab, "Import or download this list"). One question per row; only the
+  question column is needed. Optional columns: Spanish text, answer type, required, allow "Doesn't apply". The supervisor sees
+  a preview first (what will be added, and which rows are skipped and why), then chooses **Add to the end** or
+  **Replace the list**. Works for Everyone, a group, or one person.
+- **Download the checklist** as Excel or CSV in the same layout, and a **blank template** with one example per answer type.
+  A downloaded file can be edited and imported again.
+- **Share links** (Team tab): one link for Night Leads that opens straight on "make my account", and for each supervisor
+  invite code a link with the code already filled in. Copy and (on phones) Share buttons.
+- **Report downloads now include notes**: a "Notes on the report" column in Excel/CSV and a notes row in the PDF.
+- **Fixed:** on phones the date and filter boxes on Reports stuck out past their card.
+- Wording: "N/A" in the checklist editor now says "Doesn't apply", matching what Night Leads see.
+
+## Tested (automated, all passing)
+| Area | Result |
+|---|---|
+| Checklist logic, export, translations, voice recordings | 45/45 |
+| Checklist import and download (headers in any order, no headers, Spanish, bad rows, round trip) | 7/7 |
+| Real pages in Chromium at 390px and 320px, demo mode (incl. import, downloads, share links) | 8/8 |
+
+---
+
 # Night Lead Hub v0.2 (2026-10-31): notes, comments, easier to use
 
 **Status: built and tested locally. NOT online yet.** It needs a Supabase project and hosting (see SETUP.md).

@@ -5,6 +5,7 @@ import {exportReports, formatAnswer, formatTime} from './export.js';
 import {createSupabaseApi, ApiError} from './api-supabase.js';
 import {createDemoApi} from './api-demo.js';
 import {voiceSupported, speak, stopSpeaking} from './voice.js';
+import {parseChecklistTable, checklistTable, templateRows, downloadChecklist, readTableFile} from './checklist-io.js';
 
 const cfg = window.NLH_CONFIG || {};
 // "?demo" on this computer (localhost only) runs the sample-data demo, for tests; the live site can't be switched.
@@ -26,7 +27,23 @@ const S = {
   resetInputs: false, // true = next render starts forms fresh instead of keeping typed text
   notes: [], acks: [], comments: [], open: new Set(), loading: false,
   voiceOn: voiceSupported && store.get('nlh-voice') === true, // read the tour and answers out loud
+  io: null, ioOpen: false, // checklist import: {items, skipped, fileName} waiting for the supervisor's OK
+  join: null, // opened from a shared link: {code} (code is '' for a Night Lead link)
 };
+// Shared links: "?join" opens the make-an-account form; "?invite=CODE" also fills in a supervisor code.
+{
+  const qs = new URLSearchParams(location.search);
+  if (qs.has('join') || qs.has('invite')) {
+    const code = (qs.get('invite') || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 40);
+    S.join = {code};
+    S.authMode = 'signup';
+    S.showSupervisor = !!code;
+    qs.delete('join'); qs.delete('invite');
+    const rest = qs.toString();
+    history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+  }
+}
+const siteLink = (extra = '') => location.origin + location.pathname + extra;
 let t = translator(S.lang);
 
 // ------------------------------------------------------------ voice
@@ -55,7 +72,7 @@ function errorText(e) {
   const code = e instanceof ApiError ? e.code : (e && e.code) || 'unknown';
   const map = {network: 'errorNetwork', not_allowed: 'errorNotAllowed', bad_login: 'badLogin', email_not_confirmed: 'emailNotConfirmed',
     already_registered: 'alreadyRegistered', weak_password: 'weakPassword', rate_limited: 'rateLimited', last_supervisor: 'lastSupervisor',
-    demo_only: 'demoOnly', duplicate_name: 'duplicateName'};
+    demo_only: 'demoOnly', duplicate_name: 'duplicateName', file_too_big: 'fileTooBig', file_unreadable: 'fileUnreadable'};
   if (code === 'unknown' && /duplicate key|unique/i.test(e?.message || '')) return t('duplicateName');
   if (code === 'unknown' && !navigator.onLine) return t('errorNetwork');
   return t(map[code] || 'errorGeneric');
@@ -164,7 +181,7 @@ function render() {
   const typed = {};
   if (!S.resetInputs) {
     for (const el of root.querySelectorAll('input[id], textarea[id], select[id]')) {
-      if (el.type === 'password' || el.type === 'radio') continue;
+      if (el.type === 'password' || el.type === 'radio' || el.type === 'file' || el.readOnly) continue;
       typed[el.id] = el.type === 'checkbox' ? el.checked : el.value;
     }
   }
@@ -234,8 +251,9 @@ function viewAuth() {
   } else if (m === 'check-email') {
     body = `<p class="flash ok">${esc(t('checkEmail'))}</p><p><button class="btn big" data-act="auth-mode" data-v="signin">${esc(t('signIn'))}</button></p>`;
   }
+  const welcome = S.join && (m === 'signup' || api.mode === 'demo') ? `<p class="status how">${esc(S.join.code ? t('joinSupervisor') : t('joinWelcome'))}</p>` : '';
   return `<main class="auth"><header class="auth-head"><h1>${esc(t('appName'))}</h1>${langSwitch()}</header>
-    ${flashBox()}<section class="card">${m === 'signup' || api.mode === 'demo' ? '' : `<h2>${esc(m === 'forgot' ? t('forgotPassword') : t('signIn'))}</h2>`}${body}</section></main>`;
+    ${flashBox()}${welcome}<section class="card">${m === 'signup' || api.mode === 'demo' ? '' : `<h2>${esc(m === 'forgot' ? t('forgotPassword') : t('signIn'))}</h2>`}${body}</section></main>`;
 }
 
 // Lets people see what they typed, so a typo in the password isn't a mystery.
@@ -245,7 +263,7 @@ function showPassBox() {
 
 function supervisorField() {
   return `<label class="check"><input type="checkbox" id="su-is-rod" data-act="toggle-supervisor" ${S.showSupervisor ? 'checked' : ''}> ${esc(t('supervisorQ'))}</label>
-    ${S.showSupervisor ? `<label>${esc(t('inviteCode'))}<input id="su-code" name="code" autocomplete="off" autocapitalize="characters" aria-describedby="code-hint"></label>
+    ${S.showSupervisor ? `<label>${esc(t('inviteCode'))}<input id="su-code" name="code" autocomplete="off" autocapitalize="characters" aria-describedby="code-hint" value="${esc(S.join?.code || '')}"></label>
     <p id="code-hint" class="hint">${esc(t('inviteHelp'))}</p>` : ''}`;
 }
 
@@ -492,6 +510,7 @@ function viewBuilder() {
       <div class="row"><button class="btn primary" data-act="add-q">${esc(t('addQuestion'))}</button>
       <button class="btn" data-act="preview">${esc(t('preview'))}</button></div></section>
     ${S.editQ ? viewQuestionForm(tg) : ''}
+    ${viewChecklistIo(tg, list)}
     ${S.previewOpen ? `<section class="card preview"><h2>${esc(t('previewTitle'))}</h2>${list.filter(q => q.enabled).map(q => questionField(q, {disabled: true, prefix: 'pv'})).join('') || esc(t('noQuestionsHere'))}
       <button class="btn" data-act="preview">${esc(t('close'))}</button></section>` : ''}
     ${list.length ? `<ol class="qlist">${list.map((q, i) => {
@@ -500,7 +519,7 @@ function viewBuilder() {
       const lab = labelFor(q, S.lang);
       return `<li class="card qitem ${q.enabled ? '' : 'hidden-q'}">
         <div class="qtext"><strong>${esc(lab.text)}</strong>${lab.fallback ? ` <span class="fallback">${esc(t('englishOnly'))}</span>` : ''}
-          <div class="meta">${esc(typeName[q.type])} · ${esc(q.required ? t('required') : t('optional'))}${q.allow_na ? ' · N/A' : ''}</div><div>${badge(q)}</div></div>
+          <div class="meta">${esc(typeName[q.type])} · ${esc(q.required ? t('required') : t('optional'))}${q.allow_na ? ' · ' + esc(t('naChoice')) : ''}</div><div>${badge(q)}</div></div>
         <div class="row tight">
           <button class="btn sm" data-act="move" data-dir="-1" data-id="${esc(q.id)}" ${i === 0 ? 'disabled' : ''} aria-label="${esc(t('moveUp'))}">↑</button>
           <button class="btn sm" data-act="move" data-dir="1" data-id="${esc(q.id)}" ${i === list.length - 1 ? 'disabled' : ''} aria-label="${esc(t('moveDown'))}">↓</button>
@@ -510,6 +529,64 @@ function viewBuilder() {
           ${owned ? `<button class="btn sm danger" data-act="delete-q" data-id="${esc(q.id)}">${esc(t('delete'))}</button>` : ''}
         </div></li>`;
     }).join('')}</ol>` : `<p class="card">${esc(t('noQuestionsHere'))}</p>`}`;
+}
+
+function targetName(tg) {
+  if (tg.kind === 'group') return S.groups.find(g => g.id === tg.id)?.name || '?';
+  if (tg.kind === 'person') return S.people.find(p => p.id === tg.id)?.display_name || '?';
+  return t('everyone');
+}
+
+// Import a checklist from Excel/CSV, or download the current one (same layout, so it can be edited and imported again).
+function viewChecklistIo(tg, list) {
+  const typeName = {checkbox: t('typeCheckbox'), yes_no: t('typeYesNo'), status: t('typeStatus'), text: t('typeText')};
+  let pending = '';
+  if (S.io) {
+    const {items, skipped} = S.io;
+    const ownedCount = list.filter(q => ownedHere(q, tg)).length;
+    pending = `<div class="io-preview" id="io-preview" tabindex="-1"><h3>${esc(S.io.fileName)}</h3>
+      ${items.length ? `<p class="flash ok" role="status">${esc(t('ioFound', {n: items.length}))}</p>
+        <p class="hint">${esc(t('ioAddingTo', {who: targetName(tg)}))}</p>
+        <ol class="io-list">${items.map(q => `<li><strong>${esc(q.label)}</strong>${q.label_es ? `<br><span class="meta">${esc(q.label_es)}</span>` : ''}
+          <br><span class="meta">${esc(typeName[q.type])} · ${esc(q.required ? t('required') : t('optional'))}${q.allow_na ? ' · ' + esc(t('naChoice')) : ''}</span></li>`).join('')}</ol>`
+        : `<p class="flash warn" role="status">${esc(t('ioNone'))}</p>`}
+      ${skipped.length ? `<p class="warn">${esc(t('ioSkipped', {n: skipped.length}))}</p>
+        <ul class="io-skipped">${skipped.map(x => `<li>${esc(t('ioRow', {n: x.row}))}: ${esc(t('ioReason_' + x.reason))}${x.text ? ` <span class="meta">(${esc(x.text)})</span>` : ''}</li>`).join('')}</ul>` : ''}
+      <div class="stack">
+        ${items.length ? `<button class="btn primary big" data-act="io-add" ${S.busy ? 'disabled' : ''}>${esc(t('ioAdd', {n: items.length}))}</button>` : ''}
+        ${items.length && ownedCount ? `<button class="btn big danger" data-act="io-replace" ${S.busy ? 'disabled' : ''}>${esc(t('ioReplace', {n: items.length}))}</button>` : ''}
+        <button class="btn big" data-act="io-cancel">${esc(t('cancel'))}</button></div></div>`;
+  }
+  return `<details class="card io" data-io="1" ${S.ioOpen || S.io ? 'open' : ''}><summary>${esc(t('ioTitle'))}</summary>
+    <p>${esc(t('ioIntro'))}</p>
+    ${pending || `<label class="btn big filepick">${esc(t('ioPick'))}
+        <input type="file" id="io-file" data-act="io-file" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" class="sr-only"></label>
+      <p class="hint">${esc(t('ioHow'))}</p>
+      <button class="btn big" data-act="io-template">${esc(t('ioTemplate'))}</button>
+      <h3>${esc(t('ioDownload'))}</h3>
+      <div class="row"><button class="btn" data-act="io-download" data-v="xlsx" ${list.length ? '' : 'disabled'}>${esc(t('exportExcel'))}</button>
+        <button class="btn" data-act="io-download" data-v="csv" ${list.length ? '' : 'disabled'}>${esc(t('exportCsv'))}</button></div>`}
+  </details>`;
+}
+
+async function importQuestions(replace) {
+  const tg = parseTarget();
+  const list = builderList(tg);
+  const owned = list.filter(q => ownedHere(q, tg));
+  if (replace && !confirm(t('ioConfirmReplace', {old: owned.length, n: S.io.items.length}))) return;
+  await run(async () => {
+    const kept = replace ? list.filter(q => !ownedHere(q, tg)) : list;
+    let order = kept.length ? Math.max(...kept.map(q => q.sort_order)) : 0;
+    const rows = S.io.items.map(q => ({scope: tg.kind, group_id: tg.kind === 'group' ? tg.id : null, person_id: tg.kind === 'person' ? tg.id : null,
+      type: q.type, label: q.label, label_es: q.label_es, required: q.required, allow_na: q.allow_na, enabled: true, sort_order: (order += 10)}));
+    if (replace) for (const q of owned) await api.deleteQuestion(q.id);
+    await api.addQuestions(rows);
+    const n = rows.length;
+    S.io = null; S.ioOpen = false;
+    await loadBuilder();
+    S.flash = {text: t('ioDone', {n}), kind: 'ok'};
+  });
+  window.scrollTo({top: 0});
 }
 
 function viewQuestionForm(tg) {
@@ -571,7 +648,12 @@ async function moveQuestion(id, dir) {
 function viewTeam() {
   const now = new Date();
   const invites = S.invites.filter(i => i.uses_left > 0 && new Date(i.expires_at) > now);
+  const canShare = typeof navigator.share === 'function';
+  const linkBox = (url, id) => `<div class="linkbox"><input readonly id="${id}" value="${esc(url)}" aria-label="${esc(t('copyLink'))}" data-act="select-all">
+      <div class="row"><button class="btn primary" data-act="copy-link" data-v="${esc(url)}">${esc(t('copyLink'))}</button>
+      ${canShare ? `<button class="btn" data-act="share-link" data-v="${esc(url)}">${esc(t('shareSend'))}</button>` : ''}</div></div>`;
   return `<h1>${esc(t('tabTeam'))}</h1>
+    <section class="card share"><h2>${esc(t('shareTitle'))}</h2><p>${esc(t('shareIntro'))}</p>${linkBox(siteLink('?join'), 'share-url')}</section>
     <section class="card"><h2>${esc(t('people'))}</h2><ul class="people">${S.people.map(p => {
       const me = p.id === S.me.id;
       return `<li class="${p.enabled ? '' : 'off'}"><div><strong>${esc(p.display_name)}</strong> ${me ? esc(t('you')) : ''}
@@ -592,10 +674,12 @@ function viewTeam() {
         <button class="btn primary" ${S.busy ? 'disabled' : ''}>${esc(t('addGroup'))}</button></form></section>
     <section class="card"><h2>${esc(t('invites'))}</h2>
       ${S.newInvite ? `<div class="flash ok" role="status"><p>${esc(t('inviteCreated'))}</p><p class="code" id="new-code">${esc(S.newInvite)}</p>
-        <button class="btn sm" data-act="copy-code">${esc(t('copy'))}</button></div>` : ''}
+        <button class="btn sm" data-act="copy-code">${esc(t('copy'))}</button>
+        <p class="hint">${esc(t('inviteLinkHint'))}</p>${linkBox(siteLink('?invite=' + encodeURIComponent(S.newInvite)), 'invite-url')}</div>` : ''}
       <ul class="people">${invites.length ? invites.map(i => `<li><div><span class="code">${esc(i.code)}</span>
         <div class="meta">${esc(i.note || '')} ${esc(t('usesLeft', {n: i.uses_left}))} · ${esc(t('expires', {date: fmtDate(i.expires_at.slice(0, 10))}))}</div></div>
-        <button class="btn sm danger" data-act="revoke" data-id="${esc(i.code)}">${esc(t('revoke'))}</button></li>`).join('') : `<li>${esc(t('noInvites'))}</li>`}</ul>
+        <div class="row tight"><button class="btn sm" data-act="copy-link" data-v="${esc(siteLink('?invite=' + encodeURIComponent(i.code)))}">${esc(t('copyLink'))}</button>
+        <button class="btn sm danger" data-act="revoke" data-id="${esc(i.code)}">${esc(t('revoke'))}</button></div></li>`).join('') : `<li>${esc(t('noInvites'))}</li>`}</ul>
       <form data-form="invite" class="stack">
         <label>${esc(t('inviteUses'))}<input type="number" name="uses" id="inv-uses" min="1" max="20" value="1"></label>
         <label>${esc(t('inviteDays'))}<input type="number" name="days" id="inv-days" min="1" max="60" value="14"></label>
@@ -734,7 +818,7 @@ root.addEventListener('click', e => {
   }
   if (act === 'voice-toggle') { setVoice(!S.voiceOn); if (S.voiceOn) speak(t('voiceOnSample'), S.lang); return render(); }
   if (act === 'edit-again') { S.editing = true; S.token = null; return render(); }
-  if (act === 'export') return run(() => exportReports(v, filteredReports(), {people: S.people, groups: S.groups, lang: S.lang, t, from: S.filters.from, to: S.filters.to}));
+  if (act === 'export') return run(() => exportReports(v, filteredReports(), {people: S.people, groups: S.groups, comments: S.comments, lang: S.lang, t, from: S.filters.from, to: S.filters.to}));
   if (act === 'add-q') { S.editQ = {type: 'checkbox', label: '', label_es: '', required: true, allow_na: false}; S.resetInputs = true; render(); return document.getElementById('qf-type')?.focus(); }
   if (act === 'cancel-q') { S.editQ = null; S.resetInputs = true; return render(); }
   if (act === 'preview') { S.previewOpen = !S.previewOpen; return render(); }
@@ -772,11 +856,38 @@ root.addEventListener('click', e => {
     return run(async () => { await api.deleteGroup(id); await loadTeam(); });
   }
   if (act === 'revoke') return run(async () => { await api.revokeInvite(id); await loadTeam(); });
-  if (act === 'copy-code') { navigator.clipboard?.writeText(S.newInvite).then(() => flash(t('copied'))).catch(() => {}); }
+  if (act === 'copy-code') return copyText(S.newInvite);
+  if (act === 'copy-link') return copyText(v);
+  if (act === 'select-all') return el.select?.();
+  if (act === 'share-link') { navigator.share({title: t('appName'), text: t('shareText'), url: v}).catch(() => {}); return; }
+  if (act === 'io-download') {
+    const tg = parseTarget();
+    const name = `night-lead-checklist_${targetName(tg).replace(/[^\p{L}\p{N}]+/gu, '-').replace(/^-|-$/g, '') || 'list'}`;
+    return run(() => downloadChecklist(v, checklistTable(builderList(tg).filter(q => q.enabled), t), name));
+  }
+  if (act === 'io-template') return run(() => downloadChecklist('xlsx', templateRows(t), 'night-lead-checklist_template'));
+  if (act === 'io-cancel') { S.io = null; S.ioOpen = true; return render(); }
+  if (act === 'io-add') return importQuestions(false);
+  if (act === 'io-replace') return importQuestions(true);
 });
 
+// Copies text, with a fallback for browsers that block the clipboard (old phones, non-secure pages).
+function copyText(text) {
+  const ok = () => flash(t('copied'));
+  const fallback = () => {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    let done = false;
+    try { done = document.execCommand('copy'); } catch { /* not supported */ }
+    ta.remove();
+    if (done) ok();
+  };
+  if (navigator.clipboard?.writeText) navigator.clipboard.writeText(text).then(ok).catch(fallback); else fallback();
+}
+
 function goTab(v) {
-  S.tab = v; S.flash = null; S.editQ = null; S.previewOpen = false; S.newInvite = null; S.resetInputs = true; S.open = new Set();
+  S.tab = v; S.flash = null; S.editQ = null; S.previewOpen = false; S.newInvite = null; S.io = null; S.ioOpen = false; S.resetInputs = true; S.open = new Set();
   return loadTab();
 }
 // Android back button / swipe back moves between tabs instead of leaving the site.
@@ -790,6 +901,7 @@ window.addEventListener('popstate', e => {
 // Opening a report marks its notes as read.
 root.addEventListener('toggle', e => {
   const d = e.target;
+  if (d instanceof HTMLDetailsElement && d.dataset.io) { S.ioOpen = d.open; return; }
   if (!(d instanceof HTMLDetailsElement) || !d.dataset.sub) return;
   if (d.open) S.open.add(d.dataset.sub); else { S.open.delete(d.dataset.sub); return; }
   const unread = S.comments.filter(c => c.submission_id === d.dataset.sub && unreadForMe(c));
@@ -816,7 +928,16 @@ root.addEventListener('change', e => {
     store.set(draftKey(), S.answers);
     return render();
   }
-  if (el.dataset.act === 'target') { S.target = el.value; S.editQ = null; S.previewOpen = false; S.resetInputs = true; return render(); }
+  if (el.dataset.act === 'target') { S.target = el.value; S.editQ = null; S.previewOpen = false; S.io = null; S.resetInputs = true; return render(); }
+  if (el.dataset.act === 'io-file') {
+    const file = el.files && el.files[0];
+    if (!file) return;
+    return run(async () => {
+      const rows = await readTableFile(file);
+      const existing = builderList().map(q => q.label);
+      S.io = {...parseChecklistTable(rows, {existingLabels: existing}), fileName: file.name};
+    }).then(() => { const box = document.getElementById('io-preview'); box?.scrollIntoView({block: 'start'}); box?.focus(); });
+  }
   if (el.dataset.act === 'set-group') return run(async () => { await api.updatePerson(el.dataset.id, {group_id: el.value || null}); await loadTeam(); });
   if (el.dataset.act === 'toggle-supervisor') return;
   if (el.closest('form[data-form="filters"]')) {

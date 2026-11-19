@@ -7,6 +7,7 @@ A small, phone-friendly website for daily night-shift checklists.
 - **Supervisors (ROD)** see everyone's reports, who hasn't sent one yet, and any problems; edit the checklist for
   everyone, a group, or one person; comment on reports; pin notes for everyone, a group or one person (and see who read them);
   manage the team; and download reports as **Excel, CSV or PDF**.
+  They can also **import the checklist from Excel or CSV** (and download it again), and copy **share links** for the team.
 - English and Spanish, an illustrated tour for each role, and it can be added to the home screen like an app (iPhone and Android).
 - Nobody needs a ChatGPT or Claude account: just an email and a password.
 

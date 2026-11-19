@@ -255,12 +255,88 @@ test('Team: groups, invite codes, supervisor sign-up, last supervisor protected'
   assert.equal(await page.locator('nav.tabs button').count(), 3, 'used code gives a Night Lead account');
 });
 
+test('Supervisor: import a checklist from a file, download it again, share links', async () => {
+  await fresh({permissions: ['clipboard-read', 'clipboard-write']});
+  await signInDemo('Demo Supervisor');
+  await finishTour();
+  await tab('Checklists');
+  await page.locator('details.io summary').click();
+  // A CSV with headers, a Spanish column, one unknown answer type, one blank question and one duplicate.
+  const csv = ['Question (English),Question (Spanish),Answer type,Required,Allow "Doesn\'t apply"',
+    'All exterior doors locked,Todas las puertas exteriores cerradas,Checkmark,Yes,',
+    '"Trash, recycling taken out?",¿Basura sacada?,Yes / No,Yes,Yes',
+    'Day shift notes,Notas para el turno de día,Short text,No,',
+    ',,Yes / No,,', 'Alarm set,,Slider,,', 'Doors locked (sample),,,,'].join('\r\n');
+  await page.locator('#io-file').setInputFiles({name: 'our-checklist.csv', mimeType: 'text/csv', buffer: Buffer.from('\ufeff' + csv, 'utf8')});
+  const preview = page.locator('#io-preview');
+  await preview.waitFor();
+  await preview.getByText('3 question(s) ready to add').waitFor();
+  const text = await preview.innerText();
+  assert.match(text, /3 row\(s\) will be skipped/);
+  assert.match(text, /no question text/); assert.match(text, /answer type not recognised/); assert.match(text, /already in the list/);
+  await noSideScroll('import preview');
+  await page.getByRole('button', {name: 'Add 3 to the end of the list'}).click();
+  await page.getByText('3 question(s) added.').waitFor();
+  const labels = await page.locator('.qlist .qitem strong').allInnerTexts();
+  assert.deepEqual(labels.slice(-3), ['All exterior doors locked', 'Trash, recycling taken out?', 'Day shift notes']);
+  await page.locator('.qitem', {hasText: 'Trash, recycling'}).getByText('Yes / No · Required · Doesn’t apply').waitFor();
+
+  // Download gives the same layout back (so it can be edited and imported again).
+  await page.locator('details.io summary').click();
+  const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('details.io').getByRole('button', {name: 'CSV', exact: true}).click()]);
+  assert.match(dl.suggestedFilename(), /^night-lead-checklist_Everyone\.csv$/);
+  const out = readFileSync(await dl.path(), 'utf8');
+  assert.match(out, /Question \(English\),Question \(Spanish\),Answer type,Required/);
+  assert.match(out, /"Trash, recycling taken out\?",¿Basura sacada\?,Yes \/ No,Yes,Yes/);
+  const [tpl] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', {name: 'Get a blank template'}).click()]);
+  assert.equal(readFileSync(await tpl.path()).subarray(0, 2).toString(), 'PK', 'template is a real .xlsx');
+
+  // Replace asks first and only then swaps the list.
+  await page.locator('#io-file').setInputFiles({name: 'short.csv', mimeType: 'text/csv', buffer: Buffer.from('Lights off\r\nGates closed\r\n', 'utf8')});
+  await page.getByRole('button', {name: 'Replace the list with these 2'}).click();
+  await page.getByText('2 question(s) added.').waitFor();
+  assert.deepEqual(await page.locator('.qlist .qitem strong').allInnerTexts(), ['Lights off', 'Gates closed']);
+
+  // Team: one link for Night Leads, and a link with the code for a new supervisor.
+  await tab('Team');
+  const share = await page.locator('#share-url').inputValue();
+  assert.match(share, /index\.html\?join$/);
+  await page.locator('.share').getByRole('button', {name: 'Copy link'}).click();
+  await page.getByText('Copied!').waitFor();
+  assert.equal(await page.evaluate(() => navigator.clipboard.readText()), share);
+  await page.getByRole('button', {name: 'Create invite code'}).click();
+  const code = (await page.locator('#new-code').innerText()).trim();
+  assert.match(await page.locator('#invite-url').inputValue(), new RegExp('\\?invite=' + code + '$'));
+  await noSideScroll('team with links');
+  await signOut();
+
+  await page.goto(URL_ + '&join');
+  await page.getByText('Welcome! Make your account to get started.').waitFor();
+  assert.ok(!page.url().includes('join'), 'the link cleans itself from the address bar');
+  await page.goto(URL_ + '&invite=' + code.toLowerCase());
+  assert.equal(await page.locator('#su-code').inputValue(), code);
+  assert.ok(await page.locator('#su-is-rod').isChecked());
+  await page.locator('#su-name').fill('Linked Boss');
+  await page.getByRole('button', {name: 'Create account'}).click();
+  await finishTour();
+  await page.getByText('Supervisor (ROD)').first().waitFor();
+});
+
 test('Small phone (320px): no sideways scrolling', async () => {
   await fresh({viewport: {width: 320, height: 640}});
   await noSideScroll('sign-in 320');
   await signInDemo('Demo Supervisor');
   await finishTour();
   for (const name of ['Reports', 'Checklists', 'Team', 'Help']) { await tab(name); await page.waitForTimeout(100); await noSideScroll(name + ' 320'); }
+  await tab('Checklists');
+  await page.locator('details.io summary').click();
+  await noSideScroll('import box 320');
+  await tab('Reports');
+  const poking = await page.evaluate(() => {
+    const card = document.querySelector('form.filters').getBoundingClientRect();
+    return [...document.querySelectorAll('form.filters input, form.filters select')].filter(e => e.getBoundingClientRect().right > card.right + 0.5).length;
+  });
+  assert.equal(poking, 0, 'date and filter fields stay inside their card');
 });
 
 test('no JavaScript errors on any page', () => assert.deepEqual(pageErrors, []));

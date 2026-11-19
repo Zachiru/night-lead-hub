@@ -96,6 +96,7 @@ export function createSupabaseApi({supabaseUrl, supabaseAnonKey}) {
       if (id) data(await sb.from('questions').update(fields).eq('id', id));
       else data(await sb.from('questions').insert(fields));
     },
+    async addQuestions(list) { if (list.length) data(await sb.from('questions').insert(list)); },
     async deleteQuestion(id) { data(await sb.from('questions').delete().eq('id', id)); },
     async saveOverride(o) {
       const {id, ...fields} = o;
